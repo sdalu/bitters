@@ -19,7 +19,7 @@ portability and performance (no devmem, no sysfs)
 
 # Example
 
-~~~
+~~~c
 #include "bitters.h"
 #include "bitters/rpi.h"
 #include "bitters/gpio.h"
