@@ -33,8 +33,8 @@ int main() {
 
   struct bitters_gpio_cfg reset_cfg  = {
     .dir    = BITTERS_GPIO_DIR_OUT,
-	.defval = 1,
-	.label  = "reset",
+    .defval = 1,
+    .label  = "reset",
   };
 
   struct bitters_spi_cfg spi0_cfg = {
@@ -53,9 +53,10 @@ int main() {
   uint8_t data[8];
   const struct bitters_spi_transfert xfr[] = {
     { .tx = "cmd", .len = 3            },
-	{ .rx = data,  .len = sizeof(data) }
+    { .rx = data,  .len = sizeof(data) }
   };
   bitters_spi_transfert(spi->dev, xfr, 2);
 
+  return 0;
 }
 ~~~
