@@ -1,6 +1,15 @@
 #ifndef __BITTERS__SPI__H
 #define __BITTERS__SPI__H
 
+/**
+ * @file  spi.c
+ * @brief SPI interface
+ *
+ * @addtogroup Bitters
+ * @{
+ */
+
+
 #include <stddef.h>
 #include <stdint.h>
 #include <linux/spi/spidev.h>
@@ -8,11 +17,11 @@
 /*== Constants =========================================================*/
 
 /**
- *
+ * Most Significant Bit first
  */
 #define BITTERS_SPI_TRANSFERT_MSB		0
 /**
- *
+ * Least Significant Bit first
  */
 #define BITTERS_SPI_TRANSFERT_LSB		1
 
@@ -43,7 +52,7 @@
 /*== Macros ============================================================*/
 
 /**
- * Initialize an SPI interface
+ * Initialize an SPI interface.
  * Ex: bitters_spi_pin_t spi0 = BITTERS_SPI_INITIALIZER(id, ce);
  */
 
@@ -56,11 +65,11 @@
 
 
 /**
- * SPI definition
+ * SPI definition.
  */
 typedef struct bitters_spi {
-    int id;		/*< SPI device id  		*/
-    int ce;		/*< Chip Enable id 		*/
+    int id;		/**< SPI device id  		*/
+    int ce;		/**< Chip Enable id 		*/
     /* private */
     int fd;		/* File descriptor on device	*/
     uint32_t speed;	/* Bus speed in Hz		*/
@@ -69,30 +78,30 @@ typedef struct bitters_spi {
 
 
 /**
- * SPI configuration
+ * SPI configuration.
  */
 typedef struct bitters_spi_cfg {
-    uint8_t  mode;	/*< Bus mode: SPI_MODE_{0,1,2,3} */
-    uint32_t speed;	/*< Bus speed in Hz		*/
-    uint8_t  word;	/*< Size of SPI word: 8, 16	*/ 
-    uint8_t  transfert; /*< Transfert mode: LSB or MSB	*/
+    uint8_t  mode;	/**< Bus mode: SPI_MODE_{0,1,2,3} */
+    uint32_t speed;	/**< Bus speed in Hz		*/
+    uint8_t  word;	/**< Size of SPI word: 8, 16	*/ 
+    uint8_t  transfert; /**< Transfert mode: LSB or MSB	*/
 } bitters_spi_cfg_t;
 
 
 /**
- * SPI transfert chunk
+ * SPI transfert chunk.
  */
 struct bitters_spi_transfert {
-    uint8_t *tx;	/*< RX buffer or NULL 		*/
-    uint8_t *rx;	/*< TX buffer ot NULL 		*/
-    size_t   len;	/*< buffer size			*/
+    uint8_t *tx;	/**< RX buffer or NULL 		*/
+    uint8_t *rx;	/**< TX buffer ot NULL 		*/
+    size_t   len;	/**< buffer size		*/
 };
 
 
 int bitters_spi_init(void);
 
 /**
- * Enable SPI interface with selected configuration
+ * Enable SPI interface with selected configuration.
  *
  * @param spi		SPI interface
  * @param cfg		SPI configuration
@@ -101,9 +110,10 @@ int bitters_spi_init(void);
 int bitters_spi_enable(bitters_spi_t *spi, bitters_spi_cfg_t *cfg);
 
 /**
- * Change speed of SPI bus
+ * Change speed of SPI bus.
  *
  * @param spi		SPI interface
+ * @param speed		bus speed in Hz
  * @return < 0 in case of error
  */
 int bitters_spi_set_speed(bitters_spi_t *spi, uint32_t speed);
@@ -117,5 +127,7 @@ int bitters_spi_set_speed(bitters_spi_t *spi, uint32_t speed);
  */
 int bitters_spi_transfert(bitters_spi_t *spi,
 	const struct bitters_spi_transfert *xfr, unsigned int count);
+
+/** @} */
 
 #endif

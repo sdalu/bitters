@@ -1,6 +1,15 @@
 #ifndef __BITTERS__GPIO__H
 #define __BITTERS__GPIO__H
 
+/**
+ * @file  gpio.c
+ * @brief SPI interface
+ *
+ * @addtogroup Bitters
+ * @{
+ */
+
+
 #include <stddef.h>
 #include <stdint.h>
 
@@ -65,22 +74,22 @@ struct bitters_gpio_ctrl;
 
 
 /**
- * GPIO pin configuration
+ * GPIO pin configuration.
  */
 typedef struct bitters_gpio_cfg {
-    uint8_t dir;	/*< gpio direction (input | output) 		*/
-    uint8_t mode;	/*< gpio mode (open drain, open source, ...)	*/
-    char  *label;	/*< informative label for system information	*/
-    int    defval;	/*< default value when enabling output 		*/
+    uint8_t dir;	/**< gpio direction (input | output) 		*/
+    uint8_t mode;	/**< gpio mode (open drain, open source, ...)	*/
+    char  *label;	/**< informative label for system information	*/
+    int    defval;	/**< default value when enabling output 	*/
 } bitters_gpio_cfg_t;
 
 
 /**
- * GPIO pin definition
+ * GPIO pin definition.
  */
 typedef struct bitters_gpio_pin {
-    int   id;		/*< pin id					*/
-    char *ctrl_devname; /*< controller device name			*/
+    int   id;		/**< pin id					*/
+    char *ctrl_devname; /**< controller device name			*/
     /* private */
     struct bitters_gpio_ctrl *ctrl;
     int fd;
@@ -98,14 +107,14 @@ int bitters_gpio_init(void);
  */
 int bitters_gpio_pin_enable(bitters_gpio_pin_t *pin, bitters_gpio_cfg_t *cfg);
 /**
- * Disable the pin
+ * Disable the pin.
  *
  * @param pin 		pin identification
  * @return < 0 in case of error
  */
 int bitters_gpio_pin_disable(bitters_gpio_pin_t *pin);
 /**
- * Read pin value
+ * Read pin value.
  *
  * @param pin 		pin identification
  * @param value		pin value (0=low, 1=high)
@@ -113,12 +122,14 @@ int bitters_gpio_pin_disable(bitters_gpio_pin_t *pin);
  */
 int bitters_gpio_pin_read(bitters_gpio_pin_t *pin, int *value);
 /**
- * Write value to the pin
+ * Write value to the pin.
  *
  * @param pin 		pin identification
  * @param value		pin value (0=low, 1=high)
  * @return < 0 in case of error
  */
 int bitters_gpio_pin_write(bitters_gpio_pin_t *pin, int value);
+
+/** @} */
 
 #endif
