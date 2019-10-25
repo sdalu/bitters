@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <unistd.h>
 #include <signal.h>
 
@@ -12,13 +13,13 @@ bitters_delay_usec(uint16_t us) {
 #if defined(BITTERS_WITH_THREADS)
     pthread_sigmask(SIG_SETMASK, &mask, &oldmask);
 #else
-    sigmask(SIG_SETMASK, &mask, &oldmask);
+    sigprocmask(SIG_SETMASK, &mask, &oldmask);
 #endif
     usleep(us);
 #if defined(BITTERS_WITH_THREADS)
     pthread_sigmask(SIG_SETMASK, &oldmask, NULL);
 #else
-    sigmask(SIG_SETMASK, &oldmask, NULL);
+    sigprocmask(SIG_SETMASK, &oldmask, NULL);
 #endif
 }
 
@@ -29,12 +30,12 @@ bitters_delay_msec(uint16_t ms) {
 #if defined(BITTERS_WITH_THREADS)
     pthread_sigmask(SIG_SETMASK, &mask, &oldmask);
 #else 
-    sigmask(SIG_SETMASK, &mask, &oldmask);
+    sigprocmask(SIG_SETMASK, &mask, &oldmask);
 #endif   
     usleep(ms * 1000);
 #if defined(BITTERS_WITH_THREADS)
     pthread_sigmask(SIG_SETMASK, &oldmask, NULL);
 #else
-    sigmask(SIG_SETMASK, &oldmask, NULL);
+    sigprocmask(SIG_SETMASK, &oldmask, NULL);
 #endif
 }
