@@ -6,6 +6,10 @@ be found for micro-controller. It is using linux ioctl for
 portability and performance (no devmem, no sysfs)
 
 
+If using threads, this library must be compiled with the 
+`-DBITTERS_WITH_THREADS` flag
+
+
 # GPIO
 * `bitters_gpio_pin_enable`
 * `bitters_gpio_pin_disable`
@@ -27,7 +31,7 @@ portability and performance (no devmem, no sysfs)
 
 int main() {
   bitters_gpio_pin_t reset = BITTERS_GPIO_PIN_INITIALIZER(BITTERS_RPI_GPIO_CHIP,
-	                                                      BITTERS_RPI_P1_15);
+                                                          BITTERS_RPI_P1_15);
   bitters_spi_t spi0       = BITTERS_SPI_INITIALIZER(BITTERS_RPI_SPI0, 0);
 
 
@@ -48,6 +52,8 @@ int main() {
   bitters_gpio_pin_enable(&reset , &reset_cfg);
   bitters_spi_enable(&spi0, &spi0_cfg);
 
+  bitters_gpio_pin_write(&reset, 0);
+  bitters_delay_us(100);
   bitters_gpio_pin_write(&reset, 0);
   
   uint8_t data[8];
