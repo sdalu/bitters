@@ -121,6 +121,10 @@ typedef struct bitters_gpio_pin {
     uint8_t flags;
     struct bitters_gpio_ctrl *ctrl;
     int fd;
+#if defined(BITTERS_WITH_THREADS)
+    bitters_gpio_irq_cb_t cb;
+    void *cb_args;
+#endif
 } bitters_gpio_pin_t;
 
 
@@ -164,6 +168,7 @@ int bitters_gpio_pin_write(bitters_gpio_pin_t *pin, int value);
 
 /**
  * Wait for interrupt on pin.
+ * @note Undefined behaviour if used with bitters_gpio_irq_callback
  *
  * @param pin 		pin identification
  * @return -EINVAL	if pin was not enabled for interrupt
@@ -171,6 +176,19 @@ int bitters_gpio_pin_write(bitters_gpio_pin_t *pin, int value);
  */
 int bitters_gpio_irq_wait(bitters_gpio_pin_t *pin);
 
+#if defined(BITTERS_WITH_THREADS) || defined(__DOXYGEN__)
+/**
+ * Register a callback for processing interrupt on pin.
+ * @note Undefined behaviour if used with bitters_gpio_irq_wait
+ *
+ * @param pin 		pin identification
+ * @param cb		callback (use NULL to disable)
+ * @param args		argument passed to the callback
+ * @return < 0 in case of error
+ */
+int bitters_gpio_irq_callback(bitters_gpio_pin_t *pin,
+			      bitters_gpio_irq_cb_t cb, void *args);
+#endif
 /** @} */
 
 #endif

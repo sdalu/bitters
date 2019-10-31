@@ -23,6 +23,7 @@
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <fcntl.h>
+#include <poll.h>
 
 #include <string.h>
 #include <errno.h>
@@ -31,6 +32,12 @@
 #include "bitters.h"
 #include "bitters/gpio.h"
 #include "queue.h"
+
+#if defined(BITTERS_WITH_THREADS)
+#include <pthread.h>
+#include <signal.h>
+#endif
+
 
 
 #define GPIO_PIN_FLAG_INTERRUPT		0x01
@@ -92,6 +99,11 @@ struct bitters_gpio_ctrl {
     char *name;			   	/* gpio device name		*/
     int   fd;				/* file descriptor on device	*/
     int   refcount;			/* number of pin associated	*/
+#if defined(BITTERS_WITH_THREADS)
+    int   lines;
+    struct pollfd *fds;
+    pthread_t irq_thread;
+#endif
 };
 
 
@@ -118,6 +130,21 @@ _bitters_gpio_pin_disassociate_ctrl(bitters_gpio_pin_t *pin)
     return 0;
 }
 
+static void *
+bitters_gpio_irq_processing(void *args) {
+    struct bitters_gpio_ctrl *ctrl = args;
+    sigset_t mask;
+    sigfillset(&mask);
+    sigdelset(&mask, SIGHUP);
+
+    while (1) {
+	printf("ppoll: A\n");
+	ppoll(ctrl->fds, ctrl->lines, NULL, &mask);
+	printf("ppoll: B\n");
+    };
+
+    __builtin_unreachable();
+}
 
 
 static int
@@ -174,7 +201,40 @@ _bitters_gpio_pin_associate_ctrl(bitters_gpio_pin_t *pin)
 	goto failed;
     }
     BITTERS_GPIO_LOG("controller device %s opened (fd=%d)", devpath, fd);
-    
+
+#if defined(BITTERS_WITH_THREADS)
+    // Get information about chip
+    struct gpiochip_info cinfo;
+    rc = ioctl(fd, GPIO_GET_CHIPINFO_IOCTL, &cinfo);
+    if (rc < 0) {
+	rc = -errno;
+	BITTERS_GPIO_LOG("failed to get information about %s (%s)",
+			 pin->ctrl_devname, strerror(errno));
+	goto failed;
+    }
+    ctrl->lines = cinfo.lines;
+    ctrl->fds   = calloc(cinfo.lines, sizeof(struct pollfd));
+    if (ctrl->fds == NULL) {
+	rc = -ENOMEM;
+	BITTERS_GPIO_LOG("failed to allocate memory for interrupt polling");
+	goto failed;
+    }
+    for (int i = 0 ; i < cinfo.lines ; i++) {
+	ctrl->fds[i].fd = -1;
+    }
+    BITTERS_GPIO_LOG("found %u lines for %s (%s)",
+		     cinfo.lines, cinfo.name, cinfo.label);
+
+    // Create IRQ processing thread
+    rc = pthread_create(&ctrl->irq_thread, NULL,
+			bitters_gpio_irq_processing, ctrl);
+    if (rc < 0) {
+	rc = -errno;
+	BITTERS_GPIO_LOG("failed to create irq processing thread");
+	goto failed;
+    }
+#endif
+	
     // Initialise
     ctrl->fd   = fd;
     ctrl->name = name;
@@ -192,6 +252,9 @@ _bitters_gpio_pin_associate_ctrl(bitters_gpio_pin_t *pin)
  failed:
     free(name);
     free(devpath);
+#if defined(BITTERS_WITH_THREADS)
+    free(ctrl->fds);
+#endif
     free(ctrl);
     return rc;
 }
@@ -450,6 +513,17 @@ bitters_gpio_irq_wait(bitters_gpio_pin_t *pin) {
 
     return evdata.id;
 }
+
+int
+bitters_gpio_irq_callback(bitters_gpio_pin_t *pin,
+			  bitters_gpio_irq_cb_t cb, void *args)
+{
+    pin->cb      = cb;
+    pin->cb_args = args;
+
+    pthread_kill(pin->ctrl->irq_thread, SIGHUP);
+}
+
 
 
 /* 
