@@ -19,11 +19,11 @@
 /**
  * Input direction for GPIO pin
  */
-#define BITTERS_GPIO_DIR_IN  				0
+#define BITTERS_GPIO_DIR_INPUT 				0
 /**
  * Ouput direction for GPIO pin
  */
-#define BITTERS_GPIO_DIR_OUT 				1
+#define BITTERS_GPIO_DIR_OUTPUT				1
 
 
 /**
@@ -32,7 +32,7 @@
  *      - device-tree with brcm,pull (see: brcm,bcm2835-gpio.txt)
  *      - config.txt (see: config-txt/gpio.md)
  */
-#define BITTERS_GPIO_MODE_UNSPECIFIED			0
+#define BITTERS_GPIO_MODE_DEFAULT			0
 /**
  * Configure open drain beahviour for GPIO pin
  */
@@ -44,10 +44,33 @@
 
 
 /**
+ * Disable interrupt processing
+ */
+#define BITTERS_GPIO_INTERRUPT_DISABLED			0x0
+/**
+ * Process interrupt on rising edge
+ */
+#define BITTERS_GPIO_INTERRUPT_RISING_EDGE		0x1
+/**
+ * Process interrupt on falling edge
+ */
+#define BITTERS_GPIO_INTERRUPT_FALLING_EDGE		0x2
+/**
+ * Process interrupt on raising and falling edge
+ */
+#define BITTERS_GPIO_INTERRUPT_BOTH_EDGE		0x3
+
+
+/**
  * GPIO pin not used
  */
 #define BITTERS_GPIO_PIN_NONE   			NULL
 
+
+/**
+ * Value to use when polling on gpio
+ */
+#define BITTERS_GPIO_POLL_EVENTS			POLLPRI | POLLIN
 
 
 
@@ -71,7 +94,10 @@
 
 /* Forward declaration */
 struct bitters_gpio_ctrl;
+struct bitters_gpio_pin;
 
+typedef void (*bitters_gpio_irq_cb_t)(struct bitters_gpio_pin *pin, void *args);
+    
 
 /**
  * GPIO pin configuration.
@@ -79,8 +105,9 @@ struct bitters_gpio_ctrl;
 typedef struct bitters_gpio_cfg {
     uint8_t dir;	/**< gpio direction (input | output) 		*/
     uint8_t mode;	/**< gpio mode (open drain, open source, ...)	*/
-    char  *label;	/**< informative label for system information	*/
-    int    defval;	/**< default value when enabling output 	*/
+    uint8_t interrupt;	/**< interrupt processing 			*/
+    char   *label;	/**< informative label for system information	*/
+    int     defval;	/**< default value when enabling output 	*/
 } bitters_gpio_cfg_t;
 
 
@@ -88,9 +115,10 @@ typedef struct bitters_gpio_cfg {
  * GPIO pin definition.
  */
 typedef struct bitters_gpio_pin {
-    int   id;		/**< pin id					*/
-    char *ctrl_devname; /**< controller device name			*/
+    const int   id;			/**< pin id			*/
+    const char const *ctrl_devname;	/**< controller device name	*/
     /* private */
+    uint8_t flags;
     struct bitters_gpio_ctrl *ctrl;
     int fd;
 } bitters_gpio_pin_t;
@@ -106,12 +134,14 @@ int bitters_gpio_init(void);
  * @return < 0 in case of error
  */
 int bitters_gpio_pin_enable(bitters_gpio_pin_t *pin, bitters_gpio_cfg_t *cfg);
+
 /**
  * Disable the pin.
  *
  * @param pin 		pin identification
  * @return < 0 in case of error
  */
+
 int bitters_gpio_pin_disable(bitters_gpio_pin_t *pin);
 /**
  * Read pin value.
@@ -120,7 +150,9 @@ int bitters_gpio_pin_disable(bitters_gpio_pin_t *pin);
  * @param value		pin value (0=low, 1=high)
  * @return < 0 in case of error
  */
+
 int bitters_gpio_pin_read(bitters_gpio_pin_t *pin, int *value);
+
 /**
  * Write value to the pin.
  *
@@ -129,6 +161,15 @@ int bitters_gpio_pin_read(bitters_gpio_pin_t *pin, int *value);
  * @return < 0 in case of error
  */
 int bitters_gpio_pin_write(bitters_gpio_pin_t *pin, int value);
+
+/**
+ * Wait for interrupt on pin.
+ *
+ * @param pin 		pin identification
+ * @return -EINVAL	if pin was not enabled for interrupt
+ * @return < 0 in case of error
+ */
+int bitters_gpio_irq_wait(bitters_gpio_pin_t *pin);
 
 /** @} */
 

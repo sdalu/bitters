@@ -21,6 +21,13 @@
     assert(x)
 #endif
 
+/**
+ * Initialize library.
+ * Library can be left in an half initialized state in case of error.
+ *
+ * @return < 0 in case of error
+ */
+int bitters_init(void);
 
 /**
  * Try to reduce lattency of IO access.
