@@ -75,7 +75,7 @@
                         ((x) == BITTERS_GPIO_INTERRUPT_BOTH_EDGE   ))
 	
 #define BITTERS_GPIO_ASSERT_PIN_ASSOCIATED(pin)				\
-    BITTERS_GPIO_ASSERT(pin->ctrl != NULL)
+    BITTERS_GPIO_ASSERT((pin != NULL) && (pin->ctrl != NULL))
 
 
 
@@ -100,9 +100,10 @@ struct bitters_gpio_ctrl {
     int   fd;				/* file descriptor on device	*/
     int   refcount;			/* number of pin associated	*/
 #if defined(BITTERS_WITH_THREADS)
-    int   lines;
+    pthread_t irq_thread;		// thread for "irq" processing
+    int   lines;			// controller pin count
     struct pollfd *fds;
-    pthread_t irq_thread;
+    bitters_gpio_pin_t **pins;
 #endif
 };
 
@@ -119,6 +120,10 @@ static LIST_HEAD(, bitters_gpio_ctrl) bitters_gpio_ctrls =
 
 /*== Internal functions ================================================*/
     
+void _bitters_gpio_sig_usr1(int a) {
+
+}
+
 static int
 _bitters_gpio_pin_disassociate_ctrl(bitters_gpio_pin_t *pin)
 {
@@ -135,11 +140,17 @@ bitters_gpio_irq_processing(void *args) {
     struct bitters_gpio_ctrl *ctrl = args;
     sigset_t mask;
     sigfillset(&mask);
-    sigdelset(&mask, SIGHUP);
+    sigdelset(&mask, SIGUSR1);
 
+    
     while (1) {
 	printf("ppoll: A\n");
-	ppoll(ctrl->fds, ctrl->lines, NULL, &mask);
+	int rc = ppoll(ctrl->fds, ctrl->lines, NULL, &mask);
+	if (rc < 0) {
+	    printf("ERRNO: %s\n", strerror(errno));
+	} else {
+	    printf("GOT %d event(s)\n", rc);
+	}
 	printf("ppoll: B\n");
     };
 
@@ -200,7 +211,8 @@ _bitters_gpio_ctrl_create(const char *devname)
     }
     ctrl->lines = cinfo.lines;
     ctrl->fds   = calloc(cinfo.lines, sizeof(struct pollfd));
-    if (ctrl->fds == NULL) {
+    ctrl->pins  = calloc(cinfo.lines, sizeof(bitters_gpio_pin_t *));
+    if ((ctrl->fds == NULL) || (ctrl->pins == NULL)) {
 	BITTERS_GPIO_LOG("failed to allocate memory for interrupt polling");
 	goto failed;
     }
@@ -218,7 +230,10 @@ _bitters_gpio_ctrl_create(const char *devname)
 	goto failed;
     }
 #endif
-	
+
+    // Release memory
+    free(devpath);
+
     // Initialise
     ctrl->fd   = fd;
     ctrl->name = name;
@@ -226,10 +241,11 @@ _bitters_gpio_ctrl_create(const char *devname)
 
     // Deal with failures
  failed:
-    free(name);
     free(devpath);
+    free(name);
 #if defined(BITTERS_WITH_THREADS)
     free(ctrl->fds);
+    free(ctrl->pins);
 #endif
     free(ctrl);
     return NULL;
@@ -264,7 +280,10 @@ _bitters_gpio_pin_associate_ctrl(bitters_gpio_pin_t *pin)
     LIST_INSERT_HEAD(&bitters_gpio_ctrls, ctrl, entries);
     
     // Associate
- associate:
+ associate:    
+#if defined(BITTERS_WITH_THREADS)
+    BITTERS_GPIO_ASSERT(pin->id < ctrl->lines);
+#endif
     ctrl->refcount++;
     pin->ctrl = ctrl;
     BITTERS_GPIO_LOG("controller %s associated to pin %d", ctrl->name, pin->id);
@@ -321,7 +340,7 @@ bitters_gpio_pin_enable(bitters_gpio_pin_t *pin, bitters_gpio_cfg_t *cfg)
 {
     BITTERS_GPIO_ASSERT_PIN(pin);
     BITTERS_GPIO_ENSURE_PIN_ASSOCIATED(pin);
-	
+    
     // Already enabled ?
     if (pin->fd >= 0)
 	return 0;
@@ -534,10 +553,19 @@ int
 bitters_gpio_irq_callback(bitters_gpio_pin_t *pin,
 			  bitters_gpio_irq_cb_t cb, void *args)
 {
-    pin->cb      = cb;
-    pin->cb_args = args;
+    BITTERS_GPIO_ASSERT_PIN(pin);
 
-    pthread_kill(pin->ctrl->irq_thread, SIGHUP);
+    /* Save callback information */
+    pin->irq_cb      = cb;
+    pin->irq_cb_args = args;
+
+    /* Initialize polling structure (if callback is null disable) */
+    struct pollfd *pfd = &pin->ctrl->fds[pin->id];
+    pfd->fd     = (cb != NULL) ? pin->fd : -1;
+    pfd->events = BITTERS_GPIO_POLL_EVENTS;
+
+    /* Notify irq processing thread of changes */
+    pthread_kill(pin->ctrl->irq_thread, SIGUSR1);
 }
 
 

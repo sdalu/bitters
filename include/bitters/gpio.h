@@ -118,12 +118,12 @@ typedef struct bitters_gpio_pin {
     const int   id;			/**< pin id			*/
     const char const *ctrl_devname;	/**< controller device name	*/
     /* private */
-    uint8_t flags;
-    struct bitters_gpio_ctrl *ctrl;
-    int fd;
+    uint8_t flags;			// Flags for configuration state
+    struct bitters_gpio_ctrl *ctrl;	// Back pointer on controller
+    int fd;				// File descriptor for pin
 #if defined(BITTERS_WITH_THREADS)
-    bitters_gpio_irq_cb_t cb;
-    void *cb_args;
+    bitters_gpio_irq_cb_t irq_cb;	// Callback for irq processing
+    void *irq_cb_args;			// Data pointer for irq callback
 #endif
 } bitters_gpio_pin_t;
 
