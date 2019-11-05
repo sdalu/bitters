@@ -11,8 +11,12 @@
 
 #ifndef BITTERS_LOG
 #include <stdio.h>
-#define BITTERS_LOG(x, ...)						\
-    fprintf(stderr, x "\n", ##__VA_ARGS__)
+#include <errno.h>
+#define BITTERS_LOG(x, ...) do {					\
+	int errno_saved = errno;					\
+	fprintf(stderr, x "\n", ##__VA_ARGS__);				\
+	errno = errno_saved;						\
+    } while(0)
 #endif
 
 #ifndef BITTERS_ASSERT
