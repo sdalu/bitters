@@ -46,8 +46,8 @@
 /*== Log & Assert helpers ==============================================*/
 
 #if defined(BITTERS_GPIO_WITH_LOG)
-#define BITTERS_GPIO_LOG(x, ...)					\
-    fprintf(stderr, "gpio: " x "\n", ##__VA_ARGS__)
+#define BITTERS_GPIO_LOG(x, ...) 					\
+    BITTERS_LOG("gpio: " x, ##__VA_ARGS__)
 #else
 #define BITTERS_GPIO_LOG(x, ...)
 #endif
@@ -147,13 +147,99 @@ bitters_gpio_irq_processing(void *args) {
 }
 
 
-static int
-_bitters_gpio_pin_associate_ctrl(bitters_gpio_pin_t *pin)
+static struct bitters_gpio_ctrl *
+_bitters_gpio_ctrl_create(const char *devname)
 {
     int                       rc      = -EINVAL;
     int                       fd      = -1;
     char                     *name    = NULL;
     char                     *devpath = NULL;
+    struct bitters_gpio_ctrl *ctrl    = NULL;
+    
+    /* Create a new controller 
+     */
+    // Allocate memory
+    ctrl = calloc(1, sizeof(struct bitters_gpio_ctrl));
+    if (ctrl == NULL) {
+	BITTERS_GPIO_LOG("failed to allocate memory for gpio controller");
+	goto failed;
+    }
+
+    // Duplicate chip name to avoid dangling pointer
+    // if pin is later removed
+    name = strdup(devname);
+    if (name == NULL) {
+	BITTERS_GPIO_LOG("failed to allocate memory for gpio name");
+	goto failed;
+    }
+	
+    // Build device path
+    rc = asprintf(&devpath, "/dev/%s", devname);
+    if (rc < 0) {
+	errno = ENOMEM;
+	BITTERS_GPIO_LOG("unable to build path to device name (out of memory)");
+	goto failed;
+    }
+
+    // Open device
+    fd = open(devpath, O_RDONLY);
+    if (fd < 0) {
+	BITTERS_GPIO_LOG("failed to open %s (%s)", devpath, strerror(errno));
+	goto failed;
+    }
+    BITTERS_GPIO_LOG("controller device %s opened (fd=%d)", devpath, fd);
+
+#if defined(BITTERS_WITH_THREADS)
+    // Get information about chip
+    struct gpiochip_info cinfo;
+    rc = ioctl(fd, GPIO_GET_CHIPINFO_IOCTL, &cinfo);
+    if (rc < 0) {
+	BITTERS_GPIO_LOG("failed to get information about %s (%s)",
+			 pin->ctrl_devname, strerror(errno));
+	goto failed;
+    }
+    ctrl->lines = cinfo.lines;
+    ctrl->fds   = calloc(cinfo.lines, sizeof(struct pollfd));
+    if (ctrl->fds == NULL) {
+	BITTERS_GPIO_LOG("failed to allocate memory for interrupt polling");
+	goto failed;
+    }
+    for (int i = 0 ; i < cinfo.lines ; i++) {
+	ctrl->fds[i].fd = -1;
+    }
+    BITTERS_GPIO_LOG("found %u lines for %s (%s)",
+		     cinfo.lines, cinfo.name, cinfo.label);
+
+    // Create IRQ processing thread
+    rc = pthread_create(&ctrl->irq_thread, NULL,
+			bitters_gpio_irq_processing, ctrl);
+    if (rc < 0) {
+	BITTERS_GPIO_LOG("failed to create irq processing thread");
+	goto failed;
+    }
+#endif
+	
+    // Initialise
+    ctrl->fd   = fd;
+    ctrl->name = name;
+    return ctrl;
+
+    // Deal with failures
+ failed:
+    free(name);
+    free(devpath);
+#if defined(BITTERS_WITH_THREADS)
+    free(ctrl->fds);
+#endif
+    free(ctrl);
+    return NULL;
+}
+
+
+static int
+_bitters_gpio_pin_associate_ctrl(bitters_gpio_pin_t *pin)
+{
+    int                       rc      = -EINVAL;
     struct bitters_gpio_ctrl *ctrl    = NULL;
 
     /* Lookup for existing controller 
@@ -168,94 +254,24 @@ _bitters_gpio_pin_associate_ctrl(bitters_gpio_pin_t *pin)
     
     /* Create a new controller 
      */
-    // Allocate memory
-    ctrl = calloc(1, sizeof(struct bitters_gpio_ctrl));
+    ctrl = _bitters_gpio_ctrl_create(pin->ctrl_devname);
     if (ctrl == NULL) {
-	rc = -ENOMEM;
-	BITTERS_GPIO_LOG("failed to allocate memory for gpio controller");
-	goto failed;
-    }
-
-    // Duplicate chip name to avoid dangling pointer
-    // if pin is later removed
-    name = strdup(pin->ctrl_devname);
-    if (name == NULL) {
-	rc = -ENOMEM;
-	BITTERS_GPIO_LOG("failed to allocate memory for gpio name");
-	goto failed;
-    }
-	
-    // Build device path
-    rc = asprintf(&devpath, "/dev/%s", pin->ctrl_devname);
-    if (rc < 0) {
-	rc = -ENOMEM;
-	BITTERS_GPIO_LOG("unable to build path to device name (out of memory)");
-	goto failed;
-    }
-
-    // Open device
-    fd = open(devpath, O_RDONLY);
-    if (fd < 0) {
 	rc = -errno;
-	BITTERS_GPIO_LOG("failed to open %s (%s)", devpath, strerror(errno));
 	goto failed;
     }
-    BITTERS_GPIO_LOG("controller device %s opened (fd=%d)", devpath, fd);
 
-#if defined(BITTERS_WITH_THREADS)
-    // Get information about chip
-    struct gpiochip_info cinfo;
-    rc = ioctl(fd, GPIO_GET_CHIPINFO_IOCTL, &cinfo);
-    if (rc < 0) {
-	rc = -errno;
-	BITTERS_GPIO_LOG("failed to get information about %s (%s)",
-			 pin->ctrl_devname, strerror(errno));
-	goto failed;
-    }
-    ctrl->lines = cinfo.lines;
-    ctrl->fds   = calloc(cinfo.lines, sizeof(struct pollfd));
-    if (ctrl->fds == NULL) {
-	rc = -ENOMEM;
-	BITTERS_GPIO_LOG("failed to allocate memory for interrupt polling");
-	goto failed;
-    }
-    for (int i = 0 ; i < cinfo.lines ; i++) {
-	ctrl->fds[i].fd = -1;
-    }
-    BITTERS_GPIO_LOG("found %u lines for %s (%s)",
-		     cinfo.lines, cinfo.name, cinfo.label);
-
-    // Create IRQ processing thread
-    rc = pthread_create(&ctrl->irq_thread, NULL,
-			bitters_gpio_irq_processing, ctrl);
-    if (rc < 0) {
-	rc = -errno;
-	BITTERS_GPIO_LOG("failed to create irq processing thread");
-	goto failed;
-    }
-#endif
-	
-    // Initialise
-    ctrl->fd   = fd;
-    ctrl->name = name;
     // Attach to controler list
     LIST_INSERT_HEAD(&bitters_gpio_ctrls, ctrl, entries);
     
     // Associate
  associate:
-    BITTERS_GPIO_LOG("controller %s associated to pin %d", ctrl->name, pin->id);
     ctrl->refcount++;
     pin->ctrl = ctrl;
+    BITTERS_GPIO_LOG("controller %s associated to pin %d", ctrl->name, pin->id);
     return 0;
 
     // Deal with failures
  failed:
-    free(name);
-    free(devpath);
-#if defined(BITTERS_WITH_THREADS)
-    free(ctrl->fds);
-#endif
-    free(ctrl);
     return rc;
 }
 
