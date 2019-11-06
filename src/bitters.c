@@ -1,3 +1,10 @@
+/*
+ * Copyright (c) 2019
+ * Stephane D'Alu, Inria Chroma / Inria Agora, INSA Lyon, CITI Lab.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include <sched.h>
 #include <sys/mman.h>
 #include <errno.h>
