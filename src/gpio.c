@@ -82,14 +82,19 @@
 
 /*== Macros ============================================================*/
 
-#define BITTERS_GPIO_ENSURE_PIN_ASSOCIATED(pin)				\
+#define BITTERS_GPIO_ENSURE_ASSOCIATED_PIN(pin)				\
     do {								\
         int rc = _bitters_gpio_pin_ensure_associated(pin);		\
 	if (rc < 0)							\
 	    return rc;							\
     } while(0)
 
-
+#define BITTERS_GPIO_ENSURE_INTERRUPT_PIN(pin)				\
+    do {								\
+	if (! (pin->flags & GPIO_PIN_FLAG_INTERRUPT)) {			\
+	    return -EINVAL;						\
+	}								\
+    } while(0)
     
     
 /*== Structures ========================================================*/
@@ -139,7 +144,6 @@ bitters_gpio_irq_processing(void *args) {
     sigfillset(&mask);
     sigdelset(&mask, BITTERS_SIGIRQ);
 
-    
     while (1) {
 	int rc = ppoll(ctrl->fds, ctrl->lines, NULL, &mask);
 	/* Check if we got interrupted to perform a reload of the
@@ -349,7 +353,7 @@ int
 bitters_gpio_pin_enable(bitters_gpio_pin_t *pin, bitters_gpio_cfg_t *cfg)
 {
     BITTERS_GPIO_ASSERT_PIN(pin);
-    BITTERS_GPIO_ENSURE_PIN_ASSOCIATED(pin);
+    BITTERS_GPIO_ENSURE_ASSOCIATED_PIN(pin);
     
     // Already enabled ?
     if (pin->fd >= 0)
@@ -540,10 +544,8 @@ bitters_gpio_pin_write(bitters_gpio_pin_t *pin, int val)
 
 int
 bitters_gpio_irq_wait(bitters_gpio_pin_t *pin) {
-    // Only available if pin is configured for interrupts
-    if (! (pin->flags & GPIO_PIN_FLAG_INTERRUPT)) {
-	return -EINVAL;
-    }
+    BITTERS_GPIO_ASSERT_PIN(pin);
+    BITTERS_GPIO_ENSURE_INTERRUPT_PIN(pin);
     
     struct gpioevent_data evdata = { 0 };
     ssize_t size = read(pin->fd, &evdata, sizeof(evdata));
@@ -566,7 +568,8 @@ bitters_gpio_irq_callback(bitters_gpio_pin_t *pin,
 			  bitters_gpio_irq_cb_t cb, void *args)
 {
     BITTERS_GPIO_ASSERT_PIN(pin);
-
+    BITTERS_GPIO_ENSURE_INTERRUPT_PIN(pin);
+    
 #if defined(BITTERS_WITH_THREADS)
     /* Save callback information */
     pin->irq_cb      = cb;
