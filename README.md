@@ -17,6 +17,9 @@ portability and performance (no devmem, no sysfs)
 * extra log and debugging can be enabled by defininig 
   `BITTERS_GPIO_WITH_ASSERT`, `BITTERS_GPIO_WITH_LOG`, 
   `BITTERS_SPI_WITH_ASSERT`, `BITTERS_SPI_WITH_LOG`.
+* warning about raspberry pi gpio pull up/down/no configuration
+  can be disabled at compile time by defining `BITTERS_SILENCE_RPI_WARNING`,
+  or at runtime using the environment variable `BITTERS_SILENCE_RPI_WARNING`.
 
 # GPIO
 * `bitters_gpio_pin_enable`: enable and configure pin

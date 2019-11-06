@@ -322,8 +322,9 @@ _bitters_gpio_pin_ensure_associated(bitters_gpio_pin_t *pin)
 
 static void
 _bitters_gpio_warn_about_hardware_config(void) {
+#ifndef BITTERS_SILENCE_RPI_WARNING
     static int once = 0;
-    if (once++) return;
+    if (once++ || (getenv("BITTERS_SILENCE_RPI_WARNING") != NULL)) return;
 
     fprintf(stderr,
 	"\n"
@@ -333,6 +334,7 @@ _bitters_gpio_warn_about_hardware_config(void) {
 	"       |   * device-tree with brcm,pull (see: brcm,bcm2835-gpio.txt)\n"
         "       |   * config.txt (see: config-txt/gpio.md)\n"
 	"\n");
+#endif
 }
 
 
