@@ -25,6 +25,7 @@ portability and performance (no devmem, no sysfs)
 
 # SPI
 * `bitters_spi_enable`: enable and configure spi
+* `bitters_spi_disable`: disable spi
 * `bitters_spi_set_speed`: set spi bus speed
 * `bitters_spi_transfert`: perform sppi transfert
 

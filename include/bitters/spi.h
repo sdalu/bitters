@@ -117,6 +117,14 @@ int bitters_spi_init(void);
 int bitters_spi_enable(bitters_spi_t *spi, bitters_spi_cfg_t *cfg);
 
 /**
+ * Disable SPI interface
+ *
+ * @param spi		SPI interface
+ * @return < 0 in case of error
+ */
+int bitters_spi_disable(bitters_spi_t *spi);
+
+/**
  * Change speed of SPI bus.
  *
  * @param spi		SPI interface
