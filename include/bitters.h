@@ -25,6 +25,12 @@
     assert(x)
 #endif
 
+
+#ifndef BITTERS_SIGIRQ
+#define BITTERS_SIGIRQ SIGUSR1
+#endif
+
+
 /**
  * Initialize library.
  * Library can be left in an half initialized state in case of error.

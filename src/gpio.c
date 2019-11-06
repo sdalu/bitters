@@ -140,7 +140,7 @@ bitters_gpio_irq_processing(void *args) {
     struct bitters_gpio_ctrl *ctrl = args;
     sigset_t mask;
     sigfillset(&mask);
-    sigdelset(&mask, SIGUSR1);
+    sigdelset(&mask, BITTERS_SIGIRQ);
 
     
     while (1) {
@@ -565,7 +565,7 @@ bitters_gpio_irq_callback(bitters_gpio_pin_t *pin,
     pfd->events = BITTERS_GPIO_POLL_EVENTS;
 
     /* Notify irq processing thread of changes */
-    pthread_kill(pin->ctrl->irq_thread, SIGUSR1);
+    pthread_kill(pin->ctrl->irq_thread, BITTERS_SIGIRQ);
 }
 
 
