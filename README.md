@@ -14,6 +14,9 @@ portability and performance (no devmem, no sysfs)
 * Full documentation can be generated using doxygen
 * the include `bitters/rpi.h` define the pin mapping found on Raspbery Pi
 * license is Apache-2 except for queue.h file which is BSD-3-Clause
+* extra log and debugging can be enabled by defininig 
+  `BITTERS_GPIO_WITH_ASSERT`, `BITTERS_GPIO_WITH_LOG`, 
+  `BITTERS_SPI_WITH_ASSERT`, `BITTERS_SPI_WITH_LOG`.
 
 # GPIO
 * `bitters_gpio_pin_enable`: enable and configure pin
