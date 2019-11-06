@@ -28,6 +28,12 @@ portability and performance (no devmem, no sysfs)
 * `bitters_spi_set_speed`: set spi bus speed
 * `bitters_spi_transfert`: perform sppi transfert
 
+# Compiling
+~~~sh
+gcc ${bitters}/src/*.c -I ${bitters}/include .... \
+    -DBITTERS_WITH_THREADS -pthread
+~~~
+
 # Example
 
 ~~~c
