@@ -119,10 +119,6 @@ static LIST_HEAD(, bitters_gpio_ctrl) bitters_gpio_ctrls =
     
 
 /*== Internal functions ================================================*/
-    
-void _bitters_gpio_sig_usr1(int a) {
-
-}
 
 static int
 _bitters_gpio_pin_disassociate_ctrl(bitters_gpio_pin_t *pin)
@@ -135,6 +131,7 @@ _bitters_gpio_pin_disassociate_ctrl(bitters_gpio_pin_t *pin)
     return 0;
 }
 
+#if defined(BITTERS_WITH_THREADS)
 static void *
 bitters_gpio_irq_processing(void *args) {
     struct bitters_gpio_ctrl *ctrl = args;
@@ -144,19 +141,32 @@ bitters_gpio_irq_processing(void *args) {
 
     
     while (1) {
-	printf("ppoll: A\n");
 	int rc = ppoll(ctrl->fds, ctrl->lines, NULL, &mask);
+	/* Check if we got interrupted to perform a reload of the
+	 * file descriptors table
+	 */
 	if (rc < 0) {
-	    printf("ERRNO: %s\n", strerror(errno));
-	} else {
-	    printf("GOT %d event(s)\n", rc);
+	    BITTERS_GPIO_ASSERT(errno == EINTR);
+	    continue;
 	}
-	printf("ppoll: B\n");
+	/* Find an process pin irq
+	 */
+	for (int i = 0 ; i < ctrl->lines ; i++) {
+	    if (ctrl->fds[i].revents) {
+		bitters_gpio_pin_t *pin = ctrl->pins[i];
+		// Consume event
+		BITTERS_GPIO_LOG("got interrupt on pin %d", pin->id);
+		bitters_gpio_irq_wait(pin);
+		// Perform callback
+		BITTERS_GPIO_ASSERT(pin->irq_cb != NULL);
+		pin->irq_cb(pin, pin->irq_cb_args);
+	    }
+	}
     };
 
     __builtin_unreachable();
 }
-
+#endif
 
 static struct bitters_gpio_ctrl *
 _bitters_gpio_ctrl_create(const char *devname)
@@ -206,7 +216,7 @@ _bitters_gpio_ctrl_create(const char *devname)
     rc = ioctl(fd, GPIO_GET_CHIPINFO_IOCTL, &cinfo);
     if (rc < 0) {
 	BITTERS_GPIO_LOG("failed to get information about %s (%s)",
-			 pin->ctrl_devname, strerror(errno));
+			 devname, strerror(errno));
 	goto failed;
     }
     ctrl->lines = cinfo.lines;
@@ -549,12 +559,15 @@ bitters_gpio_irq_wait(bitters_gpio_pin_t *pin) {
     return evdata.id;
 }
 
+
+
 int
 bitters_gpio_irq_callback(bitters_gpio_pin_t *pin,
 			  bitters_gpio_irq_cb_t cb, void *args)
 {
     BITTERS_GPIO_ASSERT_PIN(pin);
 
+#if defined(BITTERS_WITH_THREADS)
     /* Save callback information */
     pin->irq_cb      = cb;
     pin->irq_cb_args = args;
@@ -564,8 +577,21 @@ bitters_gpio_irq_callback(bitters_gpio_pin_t *pin,
     pfd->fd     = (cb != NULL) ? pin->fd : -1;
     pfd->events = BITTERS_GPIO_POLL_EVENTS;
 
+    /* Save pin in controller table */
+    pin->ctrl->pins[pin->id] = pin;
+    
     /* Notify irq processing thread of changes */
-    pthread_kill(pin->ctrl->irq_thread, BITTERS_SIGIRQ);
+    int rc = pthread_kill(pin->ctrl->irq_thread, BITTERS_SIGIRQ);
+    if (rc < 0) {
+	return -errno;
+    }
+
+    /* Job's done */
+    return 0;
+#else
+    /* Not supported */
+    return -ENOSYS;
+#endif
 }
 
 

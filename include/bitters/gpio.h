@@ -184,6 +184,7 @@ int bitters_gpio_irq_wait(bitters_gpio_pin_t *pin);
  * @param pin 		pin identification
  * @param cb		callback (use NULL to disable)
  * @param args		argument passed to the callback
+ * @return -ENOSYS	if not compiled with thread support
  * @return < 0 in case of error
  */
 int bitters_gpio_irq_callback(bitters_gpio_pin_t *pin,
