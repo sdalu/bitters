@@ -19,6 +19,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <poll.h>
 
 
 /*== Constants =========================================================*/
@@ -80,6 +81,13 @@
 #define BITTERS_GPIO_POLL_EVENTS			POLLPRI | POLLIN
 
 
+/*
+ * Mark pin as enabled for interrupt processing
+ */
+#define GPIO_PIN_FLAG_INTERRUPT		0x01
+
+
+
 
 /*== Macros ============================================================*/
 
@@ -94,6 +102,24 @@
        .ctrl         = NULL,						\
        .fd           = -1,						\
    }
+
+
+/**
+ * Extract the file descriptor use for irq processing from the pin
+ * @note Undefined behaviour if used with bitters_gpio_irq_callback
+ *
+ * @param pin 		pin identification
+ * @return -1           if pin not enabled for interrupt processing
+ * @return		file descriptor
+ *
+ * ~~~
+ * struct pollfd pfd = { .fd     = BITTERS_GPIO_IRQ_FD(pin),
+ *                       .events = BITTERS_GPIO_POLL_EVENTS }
+ * ~~~
+ */
+#define BITTERS_GPIO_IRQ_FD(_pin)					\
+    ((pin->flags & GPIO_PIN_FLAG_INTERRUPT) ? (_pin)->fd : -1)
+
 
 
 
@@ -183,10 +209,21 @@ int bitters_gpio_pin_write(bitters_gpio_pin_t *pin, int value);
  */
 int bitters_gpio_irq_wait(bitters_gpio_pin_t *pin);
 
+/**
+ * Fill a pollfd structure, allowing to explicitely perform
+ * a poll/ppoll request combining several file descriptor
+ * @note Undefined behaviour if used with bitters_gpio_irq_callback
+ *
+ * @param pin 		pin identification
+ * @param pfd[out]      pointer to a pollfd structure
+ * @return -EINVAL	if pin was not enabled for interrupt
+ */
+int bitters_gpio_irq_fill_poolfd(bitters_gpio_pin_t *pin, struct pollfd *pfd);
+
 #if defined(BITTERS_WITH_THREADS) || defined(__DOXYGEN__)
 /**
  * Register a callback for processing interrupt on pin.
- * @note Undefined behaviour if used with bitters_gpio_irq_wait
+ * @note Undefined behaviour if used with bitters_gpio_irq_wait or poll
  *
  * @param pin 		pin identification
  * @param cb		callback (use NULL to disable)

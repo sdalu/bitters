@@ -100,3 +100,37 @@ int main() {
   return 0;
 }
 ~~~
+
+
+You could also find it easier to process interrupt using the unix
+`poll`/`ppoll` to wait on multiple events:
+
+~~~c
+// Fill the pollfd structure with all the file descriptor
+// for which you are waiting for an event
+struct pollfd pfds[] = {
+    { .fd     = BITTERS_GPIO_IRQ_FD(pin),
+      .events = BITTERS_GPIO_POLL_EVENTS },
+    ....
+}
+
+// Perform the poll request
+int rc = poll(pfds, __arraycount(pfds), -1);
+if (rc < 0) {
+   // Deal with error (interrupted syscal, ...)
+   ....
+}
+
+// Look if we got an event for our file descriptor
+if (BITTERS_GPIO_IRQ_FD(pin) >= 0) {
+    for (int i = 0 ; i < __arraycount(pfds) ; i++) {
+        if ((pfds[i].fd == BITTERS_GPIO_IRQ_FD(pin)) &&
+            (pfds[i].revents != 0)) {
+            // Consume the event
+            bitters_gpio_irq_wait(pin);
+            // Take necessary action
+            ....
+        }
+    }
+}
+~~~

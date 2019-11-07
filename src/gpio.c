@@ -40,8 +40,6 @@
 
 
 
-#define GPIO_PIN_FLAG_INTERRUPT		0x01
-
 
 /*== Log & Assert helpers ==============================================*/
 
@@ -561,6 +559,18 @@ bitters_gpio_irq_wait(bitters_gpio_pin_t *pin) {
     }
 
     return evdata.id;
+}
+
+
+
+int
+bitters_gpio_irq_fill_poolfd(bitters_gpio_pin_t *pin, struct pollfd *pfd)
+{
+    BITTERS_GPIO_ASSERT_PIN(pin);
+    BITTERS_GPIO_ENSURE_INTERRUPT_PIN(pin);
+
+    pfd->fd     = pin->fd;
+    pfd->events = BITTERS_GPIO_POLL_EVENTS;
 }
 
 
