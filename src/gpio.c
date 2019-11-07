@@ -11,8 +11,9 @@
  *        https://github.com/raspberrypi/linux/commit/410ab742a50348afa389d55f3c7bf03538ce4210#diff-a8583939a10364379827fe5c47f52dbf
  */
 
-
-#define _GNU_SOURCE   /* support for asprintf */
+#ifndef _GNU_SOURCE
+#error GNU extensions are required, please at -D_GNU_SOURCE to your compiler
+#endif
 
 #include <unistd.h>
 #include <stdint.h>

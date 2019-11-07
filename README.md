@@ -5,19 +5,19 @@ Provide access to linux GPIO, SPI using the same kind of API that can
 be found for micro-controller. It is using linux ioctl for
 portability and performance (no devmem, no sysfs)
 
-
+* Source require GNU extention to C library, compile with `-D_GNU_SOURCE`
 * If using threads, this library must be compiled with the 
   `-DBITTERS_WITH_THREADS` flag
 * If irq callback processing is required (which is generally the case),
   library require threads support and will internally use `SIGUSR1`
   (which can be changed by defining `BITTERS_SIGIRQ`).
 * Full documentation can be generated using doxygen
-* the include `bitters/rpi.h` define the pin mapping found on Raspbery Pi
-* license is Apache-2 except for queue.h file which is BSD-3-Clause
-* extra log and debugging can be enabled by defininig 
+* The include `bitters/rpi.h` define the pin mapping found on Raspbery Pi
+* License is Apache-2 except for queue.h file which is BSD-3-Clause
+* Extra log and debugging can be enabled by defininig 
   `BITTERS_GPIO_WITH_ASSERT`, `BITTERS_GPIO_WITH_LOG`, 
   `BITTERS_SPI_WITH_ASSERT`, `BITTERS_SPI_WITH_LOG`.
-* warning about raspberry pi gpio pull up/down/no configuration
+* Warning about raspberry pi gpio pull up/down/no configuration
   can be disabled at compile time by defining `BITTERS_SILENCE_RPI_WARNING`,
   or at runtime using the environment variable `BITTERS_SILENCE_RPI_WARNING`.
 
@@ -38,7 +38,7 @@ portability and performance (no devmem, no sysfs)
 # Compiling
 ~~~sh
 gcc ${bitters}/src/*.c -I ${bitters}/include .... \
-    -DBITTERS_WITH_THREADS -pthread
+    -D_GNU_SOURCE -DBITTERS_WITH_THREADS -pthread
 ~~~
 
 # Example
