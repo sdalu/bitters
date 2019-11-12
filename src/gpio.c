@@ -572,6 +572,8 @@ bitters_gpio_irq_fill_poolfd(bitters_gpio_pin_t *pin, struct pollfd *pfd)
 
     pfd->fd     = pin->fd;
     pfd->events = BITTERS_GPIO_POLL_EVENTS;
+
+    return 0;
 }
 
 
