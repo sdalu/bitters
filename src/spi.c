@@ -149,7 +149,8 @@ bitters_spi_disable(bitters_spi_t *spi)
      */
     if (close(spi->fd) < 0) {
 	int rc = -errno;
-	BITTERS_SPI_LOG("failed to close spi device (%s)", strerror(errno));
+	BITTERS_SPI_LOG("failed to close spi-%d device (%s)",
+			spi->id, strerror(errno));
 	return rc;
     }
 
