@@ -34,7 +34,7 @@
 #include "bitters/gpio.h"
 #include "queue.h"
 
-#if defined(BITTERS_WITH_THREADS)
+#if defined(BITTERS_WITH_GPIO_IRQ) && defined(BITTERS_WITH_THREADS)
 #include <pthread.h>
 #include <signal.h>
 #endif
@@ -103,7 +103,7 @@ struct bitters_gpio_ctrl {
     char *name;			   	/* gpio device name		*/
     int   fd;				/* file descriptor on device	*/
     int   refcount;			/* number of pin associated	*/
-#if defined(BITTERS_WITH_THREADS)
+#if defined(BITTERS_WITH_GPIO_IRQ) && defined(BITTERS_WITH_THREADS)
     pthread_t irq_thread;		// thread for "irq" processing
     int   lines;			// controller pin count
     struct pollfd *fds;
@@ -135,7 +135,7 @@ _bitters_gpio_pin_disassociate_ctrl(bitters_gpio_pin_t *pin)
     return 0;
 }
 
-#if defined(BITTERS_WITH_THREADS)
+#if defined(BITTERS_WITH_GPIO_IRQ) && defined(BITTERS_WITH_THREADS)
 static void *
 bitters_gpio_irq_processing(void *args) {
     struct bitters_gpio_ctrl *ctrl = args;
@@ -213,7 +213,7 @@ _bitters_gpio_ctrl_create(const char *devname)
     }
     BITTERS_GPIO_LOG("controller device %s opened (fd=%d)", devpath, fd);
 
-#if defined(BITTERS_WITH_THREADS)
+#if defined(BITTERS_WITH_GPIO_IRQ) && defined(BITTERS_WITH_THREADS)
     // Get information about chip
     struct gpiochip_info cinfo;
     rc = ioctl(fd, GPIO_GET_CHIPINFO_IOCTL, &cinfo);
@@ -256,7 +256,7 @@ _bitters_gpio_ctrl_create(const char *devname)
  failed:
     free(devpath);
     free(name);
-#if defined(BITTERS_WITH_THREADS)
+#if defined(BITTERS_WITH_GPIO_IRQ) && defined(BITTERS_WITH_THREADS)
     free(ctrl->fds);
     free(ctrl->pins);
 #endif
@@ -294,7 +294,7 @@ _bitters_gpio_pin_associate_ctrl(bitters_gpio_pin_t *pin)
     
     // Associate
  associate:    
-#if defined(BITTERS_WITH_THREADS)
+#if defined(BITTERS_WITH_GPIO_IRQ) && defined(BITTERS_WITH_THREADS)
     BITTERS_GPIO_ASSERT(pin->id < ctrl->lines);
 #endif
     ctrl->refcount++;
@@ -328,7 +328,7 @@ _bitters_gpio_warn_about_hardware_config(void) {
 	"\n"
 	"bitters: Don't forget to configure at boot-time Raspberry PI with\n"
 	"       | necessary pull-up / pull-down / no-pull\n"
-	"       |   * raspio-gpio  (see: raspi-gpio help)\n"
+	"       |   * raspi-gpio  (see: raspi-gpio help)\n"
         "       |   * config.txt (see: config-txt/gpio.md)\n"
 	"       |   * device-tree with brcm,pull (see: brcm,bcm2835-gpio.txt)\n"
 	"\n");
@@ -589,7 +589,7 @@ bitters_gpio_irq_callback(bitters_gpio_pin_t *pin,
     BITTERS_GPIO_ASSERT_PIN(pin);
     BITTERS_GPIO_ENSURE_INTERRUPT_PIN(pin);
     
-#if defined(BITTERS_WITH_THREADS)
+#if defined(BITTERS_WITH_GPIO_IRQ) && defined(BITTERS_WITH_THREADS)
     /* Save callback information */
     pin->irq_cb      = cb;
     pin->irq_cb_args = args;
