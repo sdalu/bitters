@@ -60,7 +60,7 @@
 
 /**
  * Initialize an SPI interface.
- * Ex: bitters_spi_pin_t spi0 = BITTERS_SPI_INITIALIZER(id, ce);
+ * Ex: bitters_spi_t spi0 = BITTERS_SPI_INITIALIZER(id, ce);
  */
 
 #define BITTERS_SPI_INITIALIZER(_id, _ce)				\
