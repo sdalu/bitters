@@ -25,6 +25,9 @@ portability and performance (no devmem, no sysfs)
 
 Devices
 =======
+If you need to manipulate device-tree, you can read about it:
+https://blog.michael.franzl.name/2016/11/10/setting-i2c-speed-raspberry-pi/
+
 
 GPIO
 ----
@@ -46,6 +49,7 @@ It need to be configured at boot time, using either
 * `bitters_gpio_pin_write`: write pin value
 * `bitters_gpio_irq_wait`: busy wait on irq
 * `bitters_gpio_irq_callback` register irq callback (require thread support)
+
 
 I2C
 ---
