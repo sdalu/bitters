@@ -1,27 +1,45 @@
 Bitters
 =======
 
-Provide access to linux GPIO, SPI using the same kind of API that can
+Provide access to linux GPIO, SPI, I2C using the same kind of API that can
 be found for micro-controller. It is using linux ioctl for
 portability and performance (no devmem, no sysfs)
 
+* Full documentation can be generated using doxygen
+* The include `bitters/rpi.h` define the pin mapping found on Raspberry Pi
+* License is Apache-2 except for queue.h file which is BSD-3-Clause
 * Source require GNU extention to C library, compile with `-D_GNU_SOURCE`
 * If using threads, this library must be compiled with the 
   `-DBITTERS_WITH_THREADS` flag
-* If irq callback processing is required (which is generally the case),
-  library require threads support and will internally use `SIGUSR1`
-  (which can be changed by defining `BITTERS_SIGIRQ`).
-* Full documentation can be generated using doxygen
-* The include `bitters/rpi.h` define the pin mapping found on Raspbery Pi
-* License is Apache-2 except for queue.h file which is BSD-3-Clause
+* If irq callback processing is required (which is generally the case
+  when porting straight from device manufacturer SDK) you need to
+  compile with the `-DBITTERS_WITH_GPIO_IRQ -DBITTERS_WITH_THREADS` flags 
+  and add thread support,
+  this will also internally use `SIGUSR1` (which can be changed by defining
+  `BITTERS_SIGIRQ` to the desired signal).
 * Extra log and debugging can be enabled by defininig 
-  `BITTERS_GPIO_WITH_ASSERT`, `BITTERS_GPIO_WITH_LOG`, 
-  `BITTERS_SPI_WITH_ASSERT`, `BITTERS_SPI_WITH_LOG`.
-* Warning about raspberry pi gpio pull up/down/no configuration
+  `BITTERS_{GPIO,SPI,I2C}_WITH_ASSERT`, `BITTERS_{GPIO,SPI,I2C}_WITH_LOG`.
+* Warning about Raspberry Pi gpio pull up/down/no configuration or I2C speed
   can be disabled at compile time by defining `BITTERS_SILENCE_RPI_WARNING`,
   or at runtime using the environment variable `BITTERS_SILENCE_RPI_WARNING`.
 
-# GPIO
+Devices
+=======
+
+GPIO
+----
+On Linux, the gpio pull strengh is considered to be part of the hardware
+platform. 
+It need to be configured at boot time, using either
+* on Raspberry Pi
+  * `raspi-gpio` commande, run `raspi-gpio help` for details.
+     Example for pull up: `raspi-gpio set _pin_ pu`
+  * `config.txt` bootloader config, see rpi documentation `config-txt/gpio.md`
+     for details. 
+	 Example for pull up: adding entry `gpio=_pin-list_=pu`
+* device-tree
+
+### API
 * `bitters_gpio_pin_enable`: enable and configure pin
 * `bitters_gpio_pin_disable`: disable pin
 * `bitters_gpio_pin_read`: read pin value
@@ -29,19 +47,40 @@ portability and performance (no devmem, no sysfs)
 * `bitters_gpio_irq_wait`: busy wait on irq
 * `bitters_gpio_irq_callback` register irq callback (require thread support)
 
-# SPI
+I2C
+---
+On Linux, the I2C bus speed is considered to be part of the hardware
+platform, using a fixed speed based on the lowest common speed of 
+the I2C devices attached to the bus. 
+It need to be configured at boot time, using either:
+* on Raspberry Pi
+  * `config.txt`: adding the `i2c_arm_baudrate=xxxx` parameter to the 
+   `dtparam=i2c_arm=on` entry
+* modprobe: passing the `baudrate=xxx` parameter to the driver kernel module
+* device-tree: the `clock-frequency` parameter found in
+  `brcm,bcm2835-i2c` in case of a Raspberry Pi
+
+
+SPI
+---
+
+### API
 * `bitters_spi_enable`: enable and configure spi
 * `bitters_spi_disable`: disable spi
 * `bitters_spi_set_speed`: set spi bus speed
 * `bitters_spi_transfert`: perform sppi transfert
 
-# Compiling
+
+
+Compiling
+=========
 ~~~sh
 gcc ${bitters}/src/*.c -I ${bitters}/include .... \
     -D_GNU_SOURCE -DBITTERS_WITH_THREADS -pthread
 ~~~
 
-# Example
+Example
+=======
 
 ~~~c
 #include "bitters.h"
@@ -102,8 +141,9 @@ int main() {
 ~~~
 
 
-You could also find it easier to process interrupt using the unix
-`poll`/`ppoll` to wait on multiple events:
+You could also find it easier (and it won't require thread support) to
+process interrupt using the unix `poll`/`ppoll` to wait on multiple
+events:
 
 ~~~c
 // Fill the pollfd structure with all the file descriptor
