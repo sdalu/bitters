@@ -321,7 +321,6 @@ _bitters_gpio_pin_ensure_associated(bitters_gpio_pin_t *pin)
 
 static void
 _bitters_gpio_warn_about_hardware_config(void) {
-#ifndef BITTERS_SILENCE_RPI_WARNING
     static int once = 0;
     if (once++ || (getenv("BITTERS_SILENCE_RPI_WARNING") != NULL)) return;
 
@@ -330,12 +329,17 @@ _bitters_gpio_warn_about_hardware_config(void) {
 	"bitters: Don't forget to configure at boot-time Raspberry PI with\n"
 	"       | necessary pull-up / pull-down / no-pull\n"
 	"       |   * raspio-gpio  (see: raspi-gpio help)\n"
-	"       |   * device-tree with brcm,pull (see: brcm,bcm2835-gpio.txt)\n"
         "       |   * config.txt (see: config-txt/gpio.md)\n"
+	"       |   * device-tree with brcm,pull (see: brcm,bcm2835-gpio.txt)\n"
 	"\n");
-#endif
 }
 
+#ifndef BITTERS_SILENCE_RPI_WARNING
+#  define BITTERS_GPIO_WARN_ABOUT_HARDWARE_CONFIG()			\
+    _bitters_gpio_warn_about_hardware_config()
+#else
+#  define BITTERS_GPIO_WARN_ABOUT_HARDWARE_CONFIG()
+#endif
 
 
 
@@ -344,7 +348,7 @@ _bitters_gpio_warn_about_hardware_config(void) {
 int
 bitters_gpio_init(void)
 {
-    _bitters_gpio_warn_about_hardware_config();
+    BITTERS_GPIO_WARN_ABOUT_HARDWARE_CONFIG();
     return 0;
 }
 
@@ -380,7 +384,7 @@ bitters_gpio_pin_enable(bitters_gpio_pin_t *pin, bitters_gpio_cfg_t *cfg)
 	    fprintf(stderr, "gpio mode disabled to due to kernel bug\n");
 	    break;
 	case BITTERS_GPIO_MODE_DEFAULT:
-	    _bitters_gpio_warn_about_hardware_config();
+	    BITTERS_GPIO_WARN_ABOUT_HARDWARE_CONFIG();
 	    break;
 	default:
 	    BITTERS_GPIO_LOG("unexepected mode value");
