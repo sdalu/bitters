@@ -64,6 +64,11 @@ It need to be configured at boot time, using either:
 * device-tree: the `clock-frequency` parameter found in
   `brcm,bcm2835-i2c` in case of a Raspberry Pi
 
+### API
+* `bitters_i2c_enable`: enable and configure i2c
+* `bitters_i2c_disable`: disable i2c
+* `bitters_i2c_set_speed`: set i2c bus speed (not supported on linux)
+* `bitters_i2c_transfert`: perform i2c transfert
 
 SPI
 ---
@@ -72,7 +77,7 @@ SPI
 * `bitters_spi_enable`: enable and configure spi
 * `bitters_spi_disable`: disable spi
 * `bitters_spi_set_speed`: set spi bus speed
-* `bitters_spi_transfert`: perform sppi transfert
+* `bitters_spi_transfert`: perform spi transfert
 
 
 

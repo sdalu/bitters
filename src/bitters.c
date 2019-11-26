@@ -13,6 +13,7 @@
 #include "bitters.h"
 #include "bitters/gpio.h"
 #include "bitters/spi.h"
+#include "bitters/i2c.h"
 
 #if defined(BITTERS_WITH_THREADS)
 #include <pthread.h>
@@ -68,6 +69,10 @@ bitters_init(void)
 	
     /* Initialize SPI */
     if ((rc = bitters_spi_init()) < 0)
+	return rc;
+
+    /* Initialize I2C */
+    if ((rc = bitters_i2c_init()) < 0)
 	return rc;
 
     /* Job's done */
