@@ -204,7 +204,7 @@ bitters_i2c_transfert(bitters_i2c_t *i2c, bitters_i2c_addr_t addr,
 	memset(&msg[i], 0, sizeof(struct i2c_msg));
 	msg[i].addr  = i2c_addr;
 	msg[i].flags = i2c_flags;
-	switch (xfr[i].direction) {
+	switch (xfr[i].dir) {
 	case BITTERS_I2C_TRANSFERT_WRITE:
 	    break;
 	case BITTERS_I2C_TRANSFERT_READ:

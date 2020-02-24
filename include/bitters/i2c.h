@@ -70,10 +70,25 @@ typedef uint16_t bitters_i2c_addr_t;
 struct bitters_i2c_transfert {
     uint8_t *buf;		/**< buffer or NULL 		*/
     size_t   len;		/**< buffer size		*/
-    uint8_t  direction;		/**< direction (read or write)	*/
+    union {
+      uint8_t  dir;		/**< direction (read or write)	*/
+      struct {
+#if   defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+	uint8_t read :1;	/**< read direction		*/
+	uint8_t write:1;	/**< write direction		*/
+#elif defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+	uint8_t write:1;	/**< write direction		*/
+	uint8_t read :1;	/**< read direction		*/
+#elif defined(__BYTE_ORDER__)
+#  error __BYTE_ORDER__ value is not supported
+#else
+#  error __BYTE_ORDER__ is not defined by compiler
+#endif
+      };
+    };
 };
-#define BITTERS_I2C_TRANSFERT_READ	0
-#define BITTERS_I2C_TRANSFERT_WRITE	1
+#define BITTERS_I2C_TRANSFERT_READ	0x02
+#define BITTERS_I2C_TRANSFERT_WRITE	0x01
 
 
 int bitters_i2c_init(void);
