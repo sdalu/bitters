@@ -27,7 +27,7 @@
  * Ex: bitters_i2c_t i2c0 = BITTERS_I2C_INITIALIZER(id);
  */
 
-#define BITTERS_I2C_INITIALIZER(_id, _ce)				\
+#define BITTERS_I2C_INITIALIZER(_id)					\
     {									\
        .id           = (_id),						\
        .fd           = -1,						\
