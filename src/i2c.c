@@ -197,6 +197,8 @@ bitters_i2c_transfert(bitters_i2c_t *i2c, bitters_i2c_addr_t addr,
     uint16_t i2c_addr  = addr & BITTERS_I2C_ADDR_MSK;
     uint16_t i2c_flags = 0;
 
+    BITTERS_I2C_LOG("transferring %d msg to 0x%02x", msgset.nmsgs, i2c_addr);
+    
     if (i2c_addr & BITTERS_I2C_ADDR_10)
 	i2c_flags |= I2C_M_TEN;
     
@@ -215,11 +217,18 @@ bitters_i2c_transfert(bitters_i2c_t *i2c, bitters_i2c_addr_t addr,
 	}
 	msg[i].len   = xfr[i].len;
 	msg[i].buf   = xfr[i].buf;
+
+	BITTERS_I2C_LOG("msg[%d].%c @ 0x%08x [len=%d]",
+			i,
+			(msg[i].flags & I2C_M_RD) ? 'r' : 'w',
+			xfr[i].buf, xfr[i].len);
     }
 
     int rc = ioctl(i2c->fd, I2C_RDWR, &msgset);
-    if (rc < 0)
+    if (rc < 0) {
+	BITTERS_I2C_LOG("transfer failed (%s)", strerror(errno));
 	return -errno;
+    }
 
     return 0;
 }
