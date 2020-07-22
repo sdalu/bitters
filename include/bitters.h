@@ -42,7 +42,7 @@
  * Initialize library.
  * Library can be left in an half initialized state in case of error.
  *
- * @return < 0 in case of error
+ * @return < 0 in case of error (-errno)
  */
 int bitters_init(void);
 
@@ -51,7 +51,7 @@ int bitters_init(void);
  * It will raise scheduling priority and lock page in memory
  * to avoid swapping.
  *
- * @return < 0 in case of error
+ * @return < 0 in case of error (-errno)
  */
 int bitters_reduced_lattency(void);
 

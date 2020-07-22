@@ -168,7 +168,7 @@ int bitters_gpio_init(void);
  *
  * @param pin 		pin identification
  * @param cfg		pin configuration
- * @return < 0 in case of error
+ * @return < 0 in case of error (-errno)
  */
 int bitters_gpio_pin_enable(bitters_gpio_pin_t *pin, bitters_gpio_cfg_t *cfg);
 
@@ -176,7 +176,7 @@ int bitters_gpio_pin_enable(bitters_gpio_pin_t *pin, bitters_gpio_cfg_t *cfg);
  * Disable the pin.
  *
  * @param pin 		pin identification
- * @return < 0 in case of error
+ * @return < 0 in case of error (-errno)
  */
 
 int bitters_gpio_pin_disable(bitters_gpio_pin_t *pin);
@@ -185,7 +185,7 @@ int bitters_gpio_pin_disable(bitters_gpio_pin_t *pin);
  *
  * @param pin 		pin identification
  * @param value		pin value (0=low, 1=high)
- * @return < 0 in case of error
+ * @return < 0 in case of error (-errno)
  */
 
 int bitters_gpio_pin_read(bitters_gpio_pin_t *pin, int *value);
@@ -195,7 +195,7 @@ int bitters_gpio_pin_read(bitters_gpio_pin_t *pin, int *value);
  *
  * @param pin 		pin identification
  * @param value		pin value (0=low, 1=high)
- * @return < 0 in case of error
+ * @return < 0 in case of error (-errno)
  */
 int bitters_gpio_pin_write(bitters_gpio_pin_t *pin, int value);
 
@@ -205,7 +205,7 @@ int bitters_gpio_pin_write(bitters_gpio_pin_t *pin, int value);
  *
  * @param pin 		pin identification
  * @return -EINVAL	if pin was not enabled for interrupt
- * @return < 0 in case of error
+ * @return < 0 in case of error (-errno)
  */
 int bitters_gpio_irq_wait(bitters_gpio_pin_t *pin);
 
@@ -229,7 +229,7 @@ int bitters_gpio_irq_fill_poolfd(bitters_gpio_pin_t *pin, struct pollfd *pfd);
  * @param cb		callback (use NULL to disable)
  * @param args		argument passed to the callback
  * @return -ENOSYS	if not compiled with thread support
- * @return < 0 in case of error
+ * @return < 0 in case of error (-errno)
  */
 int bitters_gpio_irq_callback(bitters_gpio_pin_t *pin,
 			      bitters_gpio_irq_cb_t cb, void *args);

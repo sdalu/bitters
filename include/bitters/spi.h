@@ -112,7 +112,7 @@ int bitters_spi_init(void);
  *
  * @param spi		SPI interface
  * @param cfg		SPI configuration
- * @return < 0 in case of error
+ * @return < 0 in case of error (-errno)
  */
 int bitters_spi_enable(bitters_spi_t *spi, bitters_spi_cfg_t *cfg);
 
@@ -120,7 +120,7 @@ int bitters_spi_enable(bitters_spi_t *spi, bitters_spi_cfg_t *cfg);
  * Disable SPI interface
  *
  * @param spi		SPI interface
- * @return < 0 in case of error
+ * @return < 0 in case of error (-errno)
  */
 int bitters_spi_disable(bitters_spi_t *spi);
 
@@ -129,7 +129,7 @@ int bitters_spi_disable(bitters_spi_t *spi);
  *
  * @param spi		SPI interface
  * @param speed		bus speed in Hz
- * @return < 0 in case of error
+ * @return < 0 in case of error (-errno)
  */
 int bitters_spi_set_speed(bitters_spi_t *spi, uint32_t speed);
 /**
@@ -138,7 +138,7 @@ int bitters_spi_set_speed(bitters_spi_t *spi, uint32_t speed);
  * @param spi		SPI interface
  * @param xfr		chunk to be transfered
  * @param count		number of transfered chunk
- * @return < 0 in case of error
+ * @return < 0 in case of error (-errno)
  */
 int bitters_spi_transfert(bitters_spi_t *spi,
 	const struct bitters_spi_transfert *xfr, unsigned int count);

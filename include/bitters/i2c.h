@@ -98,7 +98,7 @@ int bitters_i2c_init(void);
  *
  * @param i2c		I2C interface
  * @param cfg		I2C configuration
- * @return < 0 in case of error
+ * @return < 0 in case of error (-errno)
  */
 int bitters_i2c_enable(bitters_i2c_t *i2c, bitters_i2c_cfg_t *cfg);
 
@@ -106,7 +106,7 @@ int bitters_i2c_enable(bitters_i2c_t *i2c, bitters_i2c_cfg_t *cfg);
  * Disable I2C interface
  *
  * @param i2c		I2C interface
- * @return < 0 in case of error
+ * @return < 0 in case of error (-errno)
  */
 int bitters_i2c_disable(bitters_i2c_t *i2c);
 
@@ -115,7 +115,7 @@ int bitters_i2c_disable(bitters_i2c_t *i2c);
  *
  * @param i2c		I2C interface
  * @param speed		bus speed in Hz
- * @return < 0 in case of error
+ * @return < 0 in case of error (-errno)
  */
 int bitters_i2c_set_speed(bitters_i2c_t *i2c, uint32_t speed);
 
@@ -127,7 +127,7 @@ int bitters_i2c_set_speed(bitters_i2c_t *i2c, uint32_t speed);
  *			(or-ed with BITTERS_I2C_ADDR_10 if necessary)
  * @param xfr		chunk to be transfered
  * @param count		number of transfered chunk
- * @return < 0 in case of error
+ * @return < 0 in case of error (-errno)
  */
 int bitters_i2c_transfert(bitters_i2c_t *i2c, bitters_i2c_addr_t addr,
 	const struct bitters_i2c_transfert *xfr, unsigned int count);
