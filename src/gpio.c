@@ -402,14 +402,14 @@ bitters_gpio_pin_enable(bitters_gpio_pin_t *pin, bitters_gpio_cfg_t *cfg)
     case BITTERS_GPIO_INTERRUPT_DISABLED:
 	break;
     case BITTERS_GPIO_INTERRUPT_RISING_EDGE:
-	eventflags |= GPIOEVENT_EVENT_RISING_EDGE;
+	eventflags |= GPIOEVENT_REQUEST_RISING_EDGE;
 	break;
     case BITTERS_GPIO_INTERRUPT_FALLING_EDGE:
-	eventflags |= GPIOEVENT_EVENT_FALLING_EDGE;
+	eventflags |= GPIOEVENT_REQUEST_FALLING_EDGE;
 	break;
     case BITTERS_GPIO_INTERRUPT_BOTH_EDGE:
-	eventflags |= GPIOEVENT_EVENT_RISING_EDGE |
-	              GPIOEVENT_EVENT_FALLING_EDGE;
+	eventflags |= GPIOEVENT_REQUEST_RISING_EDGE |
+	              GPIOEVENT_REQUEST_FALLING_EDGE;
 	break;
     default:
 	BITTERS_GPIO_LOG("unexepected interrupt value");
