@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 
+ * Copyright (c) 2019-2020
  * Stephane D'Alu, Inria Chroma / Inria Agora, INSA Lyon, CITI Lab.
  *
  * SPDX-License-Identifier: Apache-2.0
@@ -66,7 +66,7 @@ bitters_spi_init(void)
 int
 bitters_spi_enable(bitters_spi_t *spi, bitters_spi_cfg_t *cfg)
 {
-    int rc = -1;
+    int rc = -EINVAL;
 
     BITTERS_SPI_ASSERT_DEVID(spi->id);
     BITTERS_SPI_ASSERT_CE(spi->ce);

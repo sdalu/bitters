@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 
+ * Copyright (c) 2019-2020
  * Stephane D'Alu, Inria Chroma / Inria Agora, INSA Lyon, CITI Lab.
  *
  * SPDX-License-Identifier: Apache-2.0
@@ -87,7 +87,7 @@ bitters_i2c_init(void)
 int
 bitters_i2c_enable(bitters_i2c_t *i2c, bitters_i2c_cfg_t *cfg)
 {
-    int rc = -1;
+    int rc = -EINVAL;
 
     BITTERS_I2C_ASSERT_DEVID(i2c->id);
 
