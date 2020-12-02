@@ -134,7 +134,7 @@ int main() {
   bitters_gpio_irq_callback(&irq, my_irq_callback, NULL);
   bitters_spi_enable(&spi0, &spi0_cfg);
 
-  bitters_gpio_pin_write(&reset, 0);
+  bitters_gpio_pin_write(&reset, 1);
   bitters_delay_us(100);
   bitters_gpio_pin_write(&reset, 0);
   
