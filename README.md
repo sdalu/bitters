@@ -110,7 +110,7 @@ int main() {
 
 
   struct bitters_gpio_cfg reset_cfg  = {
-    .dir       = BITTERS_GPIO_DIR_OUT,
+    .dir       = BITTERS_GPIO_DIR_OUTPUT,
     .defval    = 1,
     .label     = "reset",
   };
@@ -143,7 +143,7 @@ int main() {
     { .tx = "cmd", .len = 3            },
     { .rx = data,  .len = sizeof(data) }
   };
-  bitters_spi_transfert(spi->dev, xfr, 2);
+  bitters_spi_transfert(&spi0, xfr, 2);
 
   return 0;
 }
