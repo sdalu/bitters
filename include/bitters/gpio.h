@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019
+ * Copyright (c) 2023
  * Stephane D'Alu, Inria Chroma / Inria Agora, INSA Lyon, CITI Lab.
  *
  * SPDX-License-Identifier: Apache-2.0
@@ -10,7 +10,7 @@
 
 /**
  * @file  gpio.c
- * @brief SPI interface
+ * @brief GPIO interface
  *
  * @addtogroup Bitters
  * @{
@@ -49,6 +49,27 @@
  * Configure open drain source for GPIO pin
  */
 #define BITTERS_GPIO_MODE_OPEN_SOURCE			2
+
+
+/**
+ * Use behaviour defined by hardware
+ * See: - raspio-gpio  (see: raspi-gpio help)
+ *      - device-tree with brcm,pull (see: brcm,bcm2835-gpio.txt)
+ *      - config.txt (see: config-txt/gpio.md)
+ */
+#define BITTERS_GPIO_BIAS_DEFAULT			0
+/**
+ * Disable bias behaviour.
+ */
+#define BITTERS_GPIO_BIAS_DISABLED			1
+/**
+ * Configure pull-up behaviour for GPIO pin
+ */
+#define BITTERS_GPIO_BIAS_PULL_UP			2
+/**
+ * Configure pull-down behaviour for GPIO pin
+ */
+#define BITTERS_GPIO_BIAS_PULL_DOWN			3
 
 
 /**
@@ -136,11 +157,13 @@ typedef void (*bitters_gpio_irq_cb_t)(struct bitters_gpio_pin *pin, void *args);
  * GPIO pin configuration.
  */
 typedef struct bitters_gpio_cfg {
-    uint8_t dir;	/**< gpio direction (input | output) 		*/
-    uint8_t mode;	/**< gpio mode (open drain, open source, ...)	*/
-    uint8_t interrupt;	/**< interrupt processing 			*/
-    char   *label;	/**< informative label for system information	*/
-    int     defval;	/**< default value when enabling output 	*/
+    char    *label;	/**< IO: informative label for system information */
+    uint8_t  dir;	/**< IO: gpio direction (input | output)  	  */
+    uint8_t  mode;	/**<  O: gpio mode (open drain, open source, ...) */
+    uint8_t  bias;	/**< I : gpio bias (pull-up, pull-down, ...)	  */
+    uint8_t  interrupt;	/**< I : interrupt processing 			  */
+    uint32_t debounce;  /**< I :debounce for input, 0 = none              */
+    int      defval;	/**<  O: default value when enabling output 	  */
 } bitters_gpio_cfg_t;
 
 

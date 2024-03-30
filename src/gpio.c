@@ -5,6 +5,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/* DOC:
+ * https://lwn.net/ml/linux-kernel/20240115004847.22369-2-warthog618@gmail.com/
+ */
 
 /* Kernel: 4.19.75-v7+
  * BUG_1: using OPEN_DRAIN or OPEN_SOURCE disable setting the line
@@ -152,7 +155,7 @@ bitters_gpio_irq_processing(void *args) {
 	    BITTERS_GPIO_ASSERT(errno == EINTR);
 	    continue;
 	}
-	/* Find an process pin irq
+	/* Find and process pin irq
 	 */
 	for (int i = 0 ; i < ctrl->lines ; i++) {
 	    if (ctrl->fds[i].revents) {
@@ -201,7 +204,8 @@ _bitters_gpio_ctrl_create(const char *devname)
     rc = asprintf(&devpath, "/dev/%s", devname);
     if (rc < 0) {
 	errno = ENOMEM;
-	BITTERS_GPIO_LOG("unable to build path to device name (out of memory)");
+	BITTERS_GPIO_LOG("unable to build path to device name"
+			 " (out of memory)");
 	goto failed;
     }
 
@@ -364,24 +368,55 @@ bitters_gpio_pin_enable(bitters_gpio_pin_t *pin, bitters_gpio_cfg_t *cfg)
     if (pin->fd >= 0)
 	return 0;
 
-    // Build handle flags
-    uint8_t handleflags = 0;
+    // Build flags
+    uint64_t flags = 0;
     switch(cfg->dir) {
     case BITTERS_GPIO_DIR_INPUT:
-	handleflags |= GPIOHANDLE_REQUEST_INPUT;
+	flags |= GPIO_V2_LINE_FLAG_INPUT;
+	switch(cfg->interrupt) {
+	case BITTERS_GPIO_INTERRUPT_DISABLED:
+	    break;
+	case BITTERS_GPIO_INTERRUPT_RISING_EDGE:
+	    flags |= GPIO_V2_LINE_FLAG_EDGE_RISING;
+	    break;
+	case BITTERS_GPIO_INTERRUPT_FALLING_EDGE:
+	    flags |= GPIO_V2_LINE_FLAG_EDGE_FALLING;
+	    break;
+	case BITTERS_GPIO_INTERRUPT_BOTH_EDGE:
+	    flags |= GPIO_V2_LINE_FLAG_EDGE_RISING  |
+		GPIO_V2_LINE_FLAG_EDGE_FALLING ;
+	    break;
+	default:
+	    BITTERS_GPIO_LOG("unexepected interrupt value");
+	    return -EINVAL;
+	}
+	switch(cfg->bias) {
+	case BITTERS_GPIO_BIAS_DISABLED:
+	    flags |= GPIO_V2_LINE_FLAG_BIAS_DISABLED;
+	    break;
+	case BITTERS_GPIO_BIAS_PULL_UP:
+	    flags |= GPIO_V2_LINE_FLAG_BIAS_PULL_UP;
+	    break;
+	case BITTERS_GPIO_BIAS_PULL_DOWN:
+	    flags |= GPIO_V2_LINE_FLAG_BIAS_PULL_DOWN;
+	    break;
+	case BITTERS_GPIO_BIAS_DEFAULT:
+	    BITTERS_GPIO_WARN_ABOUT_HARDWARE_CONFIG();
+	    break;
+	default:
+	    BITTERS_GPIO_LOG("unexepected bias value");
+	    return -EINVAL;
+	}
 	break;
+	
     case BITTERS_GPIO_DIR_OUTPUT:
-	handleflags |= GPIOHANDLE_REQUEST_OUTPUT;
+	flags |= GPIO_V2_LINE_FLAG_OUTPUT;
 	switch(cfg->mode) {
 	case BITTERS_GPIO_MODE_OPEN_DRAIN:
-	    // XXX: See BUG_1
-	    // handleflags |= GPIOHANDLE_REQUEST_OPEN_DRAIN;
-	    fprintf(stderr, "gpio mode disabled to due to kernel bug\n");
+	    flags |= GPIO_V2_LINE_FLAG_OPEN_DRAIN;
 	    break;
 	case BITTERS_GPIO_MODE_OPEN_SOURCE:
-	    // XXX: See BUG_1
-	    // handleflags |= GPIOHANDLE_REQUEST_OPEN_SOURCE;
-	    fprintf(stderr, "gpio mode disabled to due to kernel bug\n");
+	    flags |= GPIO_V2_LINE_FLAG_OPEN_SOURCE;
 	    break;
 	case BITTERS_GPIO_MODE_DEFAULT:
 	    BITTERS_GPIO_WARN_ABOUT_HARDWARE_CONFIG();
@@ -391,83 +426,56 @@ bitters_gpio_pin_enable(bitters_gpio_pin_t *pin, bitters_gpio_cfg_t *cfg)
 	    return -EINVAL;
 	}
 	break;
+
     default:
 	BITTERS_GPIO_LOG("unexepected direction value");
 	return -EINVAL;
     }
 
-    // Build event flag
-    uint8_t eventflags = 0;
-    switch(cfg->interrupt) {
-    case BITTERS_GPIO_INTERRUPT_DISABLED:
-	break;
-    case BITTERS_GPIO_INTERRUPT_RISING_EDGE:
-	eventflags |= GPIOEVENT_REQUEST_RISING_EDGE;
-	break;
-    case BITTERS_GPIO_INTERRUPT_FALLING_EDGE:
-	eventflags |= GPIOEVENT_REQUEST_FALLING_EDGE;
-	break;
-    case BITTERS_GPIO_INTERRUPT_BOTH_EDGE:
-	eventflags |= GPIOEVENT_REQUEST_RISING_EDGE |
-	              GPIOEVENT_REQUEST_FALLING_EDGE;
-	break;
-    default:
-	BITTERS_GPIO_LOG("unexepected interrupt value");
-	return -EINVAL;
-    }
     if ((cfg->interrupt != BITTERS_GPIO_INTERRUPT_DISABLED) &&
 	(cfg->dir       != BITTERS_GPIO_DIR_INPUT         )) {
 	BITTERS_GPIO_LOG("when using interrupt direction must be input");
 	return -EINVAL;
     }
 
-    if (cfg->interrupt == BITTERS_GPIO_INTERRUPT_DISABLED) {
-	// Create gpio handle request
-	struct gpiohandle_request req = {
-	    .lines          = 1,
-	    .lineoffsets    = { [0] = pin->id     },
-	    .flags          = handleflags,
-	    .default_values = { [0] = cfg->defval },
-	};
-	strncpy(req.consumer_label, cfg->label, sizeof(req.consumer_label));
-
-	// Call ioctl
-	int rc = ioctl(pin->ctrl->fd, GPIO_GET_LINEHANDLE_IOCTL, &req);
-	if (rc < 0) {
-	    BITTERS_GPIO_LOG("failed to issue GPIO_GET_LINEHANDLE IOCTL"
-			     " for pin %d (%s)", pin->id, strerror(errno));
-	    return -errno;
+    // Create gpio line request
+    struct gpio_v2_line_request req = {
+	.num_lines        = 1,
+	.offsets          = { [0] = pin->id },
+	.config.flags     = flags,
+	.config.num_attrs = ((cfg->dir     == BITTERS_GPIO_DIR_INPUT) &&
+			     (cfg->debounce > 0)) ? 2 : 1,
+	.config.attrs     = {
+	    { .mask                   = 1 << 0,
+	      .attr.id                = GPIO_V2_LINE_ATTR_ID_OUTPUT_VALUES,
+	      .attr.values            = (cfg->defval ? 1 : 0) << 0 },
+	    { .mask                   = 1 << 0,
+	      .attr.id                = GPIO_V2_LINE_ATTR_ID_DEBOUNCE,
+	      .attr.debounce_period_us= cfg->debounce              }
 	}
-
-	// Store file descriptore
-	pin->fd = req.fd;
-    } else {
-	// Create gpio event request
-	struct gpioevent_request req = {
-	    .lineoffset     = pin->id,
-	    .handleflags    = handleflags,
-	    .eventflags     = eventflags,
-	};
-	strncpy(req.consumer_label, cfg->label, sizeof(req.consumer_label));
-
-	// Call ioctl
-	int rc = ioctl(pin->ctrl->fd, GPIO_GET_LINEEVENT_IOCTL, &req);
-	if (rc < 0) {
-	    BITTERS_GPIO_LOG("failed to issue GPIO_GET_LINEEVENT_IOCTL"
-			     " for pin %d (%s)", pin->id, strerror(errno));
-	    return -errno;
-	}
-
-	// Mark this pin as enabled for interrupt
-	pin->flags |= GPIO_PIN_FLAG_INTERRUPT;
-	
-	// Store file descriptore
-	pin->fd = req.fd;
+    };
+    strncpy(req.consumer, cfg->label, sizeof(req.consumer));
+    
+    // Call ioctl
+    int rc = ioctl(pin->ctrl->fd, GPIO_V2_GET_LINE_IOCTL, &req);
+    if (rc < 0) {
+	BITTERS_GPIO_LOG("failed to issue GPIO_V2_GET_LINE IOCTL"
+			 " for pin %d (%s)", pin->id, strerror(errno));
+	return -errno;
     }
-
+    
+    // Store file descriptor
+    pin->fd = req.fd;
+    req.event_buffer_size;
+    
+    // Set interrupt handling status
+    if (cfg->interrupt != BITTERS_GPIO_INTERRUPT_DISABLED) {
+	pin->flags |= GPIO_PIN_FLAG_INTERRUPT;
+    }
+    
     // Job's done
     BITTERS_GPIO_LOG("pin %d (%s) enabled (fd=%d)",
-		     pin->id, cfg->label, pin->fd);    
+		     pin->id, cfg->label, pin->fd);
     return 0;
 }
 
@@ -507,8 +515,8 @@ bitters_gpio_pin_read(bitters_gpio_pin_t *pin, int *val)
     BITTERS_GPIO_ASSERT_PIN(pin);
     BITTERS_GPIO_ASSERT_PIN_ASSOCIATED(pin);
 
-    struct gpiohandle_data data;
-    int rc = ioctl(pin->fd, GPIOHANDLE_GET_LINE_VALUES_IOCTL, &data);
+    struct gpio_v2_line_values values = { .mask = 1 << 0 };
+    int rc = ioctl(pin->fd, GPIO_V2_LINE_GET_VALUES_IOCTL, &values);
     if (rc < 0) {
 	rc = -errno;
 	BITTERS_GPIO_LOG("failed to issue GPIOHANDLE_GET_LINE_VALUES"
@@ -517,7 +525,7 @@ bitters_gpio_pin_read(bitters_gpio_pin_t *pin, int *val)
     }
 
     if (val != NULL)
-	*val = data.values[0];
+	*val = (values.bits & (1 << 0)) ? 1 : 0;
     
     return 0;
 }
@@ -530,14 +538,15 @@ bitters_gpio_pin_write(bitters_gpio_pin_t *pin, int val)
     BITTERS_GPIO_ASSERT_PIN(pin);
     BITTERS_GPIO_ASSERT_PIN_ASSOCIATED(pin);
 
-    struct gpiohandle_data data = {
-       .values[0] = (uint8_t)((val == 0) ? 0 : 1)
+    struct gpio_v2_line_values values = {
+	.mask = 1                    << 0,
+	.bits = ((val == 0) ? 0 : 1) << 0
     };
 
-    int rc = ioctl(pin->fd, GPIOHANDLE_SET_LINE_VALUES_IOCTL, &data);
+    int rc = ioctl(pin->fd, GPIO_V2_LINE_SET_VALUES_IOCTL, &values);
     if (rc < 0) {
 	rc = -errno;
-	BITTERS_GPIO_LOG("failed to issue GPIOHANDLE_SET_LINE_VALUES"
+	BITTERS_GPIO_LOG("failed to issue GPIO_V2_LINE_SET_VALUES"
 			 " on pin %d (%s)", pin->id, strerror(errno));
 	return rc;
     }
@@ -551,19 +560,20 @@ int
 bitters_gpio_irq_wait(bitters_gpio_pin_t *pin) {
     BITTERS_GPIO_ASSERT_PIN(pin);
     BITTERS_GPIO_ENSURE_INTERRUPT_PIN(pin);
-    
-    struct gpioevent_data evdata = { 0 };
-    ssize_t size = read(pin->fd, &evdata, sizeof(evdata));
+
+    // [GPIO_V2_LINES_MAX * 16]
+    struct gpio_v2_line_event event = { 0 };
+    ssize_t size = read(pin->fd, &event, sizeof(event));
 
     if (size < 0) {
 	BITTERS_GPIO_LOG("failed to read event (%s)", strerror(errno));
 	return -errno;
-    } else if (size != sizeof(evdata)) {
+    } else if (size != sizeof(event)) {
 	BITTERS_GPIO_LOG("got event of unexpected size");
 	return -ERANGE;
     }
 
-    return evdata.id;
+    return event.id;
 }
 
 
