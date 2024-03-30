@@ -53,11 +53,34 @@
 
 
 
+static void
+_bitters_spi_warn_about_bufsize_config(void) {
+    static int once = 0;
+    if (once++                                                  ||
+	(getenv("BITTERS_SILENCE_WARNING"            ) != NULL) ||
+	(getenv("BITTERS_SILENCE_SPI_BUFSIZE_WARNING") != NULL)) return;
+
+    fprintf(stderr,
+	"\n"
+	"bitters: On linux SPI buffer size is limited to one page\n"
+	"       | this can be increased by adding spidev.bufsiz=65536 to the kernel"
+	"\n");
+}
+
+#if !defined(BITTERS_SILENCE_WARNING            ) &&			\
+    !defined(BITTERS_SILENCE_SPI_BUFSIZE_WARNING)
+#  define BITTERS_SPI_WARN_ABOUT_BUFSIZE_CONFIG()			\
+    _bitters_spi_warn_about_bufsize_config()
+#else
+#  define BITTERS_SPI_WARN_ABOUT_BUFSIZE_CONFIG()
+#endif
+
 /*== Exported function =================================================*/
 
 int
 bitters_spi_init(void)
 {
+    BITTERS_SPI_WARN_ABOUT_BUFSIZE_CONFIG();	    
     return 0;
 }
 

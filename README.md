@@ -19,9 +19,16 @@ portability and performance (no devmem, no sysfs)
   `BITTERS_SIGIRQ` to the desired signal).
 * Extra log and debugging can be enabled by defininig 
   `BITTERS_{GPIO,SPI,I2C}_WITH_ASSERT`, `BITTERS_{GPIO,SPI,I2C}_WITH_LOG`.
+* All hardware/software configuration warnings can be disabled at compile time
+  by defining `BITTERS_SILENCE_WARNING`, or at runtime using
+  the environment variable `BITTERS_SILENCE_WARNING`.
 * Warning about Raspberry Pi gpio pull up/down/no configuration or I2C speed
   can be disabled at compile time by defining `BITTERS_SILENCE_RPI_WARNING`,
   or at runtime using the environment variable `BITTERS_SILENCE_RPI_WARNING`.
+* Warning about SPI linux bufsize limit can be disabled at compile time
+  by defining `BITTERS_SILENCE_SPI_BUFSIZE_WARNING`, or at runtime using
+  the environment variable `BITTERS_SILENCE_SPI_BUFSIZE_WARNING`.
+* All warnings can be sillence using `BITTERS_SILENCE_WARNING`
 
 Devices
 =======
@@ -41,6 +48,7 @@ It need to be configured at boot time, using either
      for details. 
 	 Example for pull up: adding entry `gpio=_pin-list_=pu`
 * device-tree
+
 
 ### API
 * `bitters_gpio_pin_enable`: enable and configure pin
@@ -72,6 +80,10 @@ It need to be configured at boot time, using either:
 
 SPI
 ---
+On linux the SPI max transfer size is by default a page size (4096 bytes),
+you could/should increase this value by addind the `spidev.bufsiz=65536`
+parameter to the kernel. On a Raspberry Pi, this is done in `/boot/cmdline.txt`
+
 
 ### API
 * `bitters_spi_enable`: enable and configure spi

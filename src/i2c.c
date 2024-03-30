@@ -53,7 +53,9 @@
 static void
 _bitters_i2c_warn_about_hardware_config(void) {
     static int once = 0;
-    if (once++ || (getenv("BITTERS_SILENCE_RPI_WARNING") != NULL)) return;
+    if (once++                                          ||
+	(getenv("BITTERS_SILENCE_WARNING"    ) != NULL) ||
+	(getenv("BITTERS_SILENCE_RPI_WARNING") != NULL)) return;
 
     fprintf(stderr,
 	"\n"
