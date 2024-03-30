@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019
+ * Copyright (c) 2019,2023
  * Stephane D'Alu, Inria Chroma / Inria Agora, INSA Lyon, CITI Lab.
  *
  * SPDX-License-Identifier: Apache-2.0
@@ -26,11 +26,11 @@
 /**
  * Most Significant Bit first
  */
-#define BITTERS_SPI_TRANSFERT_MSB		0
+#define BITTERS_SPI_TRANSFER_MSB		0
 /**
  * Least Significant Bit first
  */
-#define BITTERS_SPI_TRANSFERT_LSB		1
+#define BITTERS_SPI_TRANSFER_LSB		1
 
 /**
  * SPI word size. 
@@ -81,6 +81,7 @@ typedef struct bitters_spi {
     int fd;		/* File descriptor on device	*/
     uint32_t speed;	/* Bus speed in Hz		*/
     uint8_t  word;	/* Size of SPI word: 8, 16	*/
+    uint8_t  transfer;  /* Transfer mode: LSB or MSB	*/
 } bitters_spi_t;
 
 
@@ -91,14 +92,14 @@ typedef struct bitters_spi_cfg {
     uint8_t  mode;	/**< Bus mode: SPI_MODE_{0,1,2,3} */
     uint32_t speed;	/**< Bus speed in Hz		*/
     uint8_t  word;	/**< Size of SPI word: 8, 16	*/ 
-    uint8_t  transfert; /**< Transfert mode: LSB or MSB	*/
+    uint8_t  transfer;  /**< Transfer mode: LSB or MSB	*/
 } bitters_spi_cfg_t;
 
 
 /**
- * SPI transfert chunk.
+ * SPI transfer chunk.
  */
-struct bitters_spi_transfert {
+struct bitters_spi_transfer {
     uint8_t *tx;	/**< RX buffer or NULL 		*/
     uint8_t *rx;	/**< TX buffer ot NULL 		*/
     size_t   len;	/**< buffer size		*/
@@ -132,6 +133,16 @@ int bitters_spi_disable(bitters_spi_t *spi);
  * @return < 0 in case of error (-errno)
  */
 int bitters_spi_set_speed(bitters_spi_t *spi, uint32_t speed);
+
+/**
+ * Change word size of SPI bus.
+ *
+ * @param spi		SPI interface
+ * @param word		word size
+ * @return < 0 in case of error (-errno)
+ */
+int bitters_spi_set_wordsize(bitters_spi_t *spi, uint8_t word);
+
 /**
  * Change speed of SPI bus.
  *
@@ -140,8 +151,8 @@ int bitters_spi_set_speed(bitters_spi_t *spi, uint32_t speed);
  * @param count		number of transfered chunk
  * @return < 0 in case of error (-errno)
  */
-int bitters_spi_transfert(bitters_spi_t *spi,
-	const struct bitters_spi_transfert *xfr, unsigned int count);
+int bitters_spi_transfer(bitters_spi_t *spi,
+	const struct bitters_spi_transfer *xfr, unsigned int count);
 
 /** @} */
 

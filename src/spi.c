@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020
+ * Copyright (c) 2019-2020,2023
  * Stephane D'Alu, Inria Chroma / Inria Agora, INSA Lyon, CITI Lab.
  *
  * SPDX-License-Identifier: Apache-2.0
@@ -97,19 +97,22 @@ bitters_spi_enable(bitters_spi_t *spi, bitters_spi_cfg_t *cfg)
 	goto failed;
     }
 
-    uint8_t mode = cfg->mode;
-    if (cfg->transfert == BITTERS_SPI_TRANSFERT_LSB)
-	mode |= SPI_LSB_FIRST;
-    rc = ioctl(spi->fd, SPI_IOC_WR_MODE, &mode);
+    rc = ioctl(spi->fd, SPI_IOC_WR_MODE, &cfg->mode);
     if (rc < 0) {
 	rc = -errno;
-	BITTERS_SPI_LOG("failed to set spi mode/transfert (%s)",
-			strerror(errno));
+	BITTERS_SPI_LOG("failed to set spi mode (%s)", strerror(errno));
+	goto failed;
+    }
+
+    rc = ioctl(spi->fd, SPI_IOC_WR_LSB_FIRST, &cfg->transfer);
+    if (rc < 0) {
+	rc = -errno;
+	BITTERS_SPI_LOG("failed to set spi transfer (%s)", strerror(errno));
 	goto failed;
     }
 
     rc = ioctl(spi->fd, SPI_IOC_WR_BITS_PER_WORD, &cfg->word);
-    if (rc < 0) { // XXX: ^^^ seems to have no effect ?! ^^^
+    if (rc < 0) {
 	rc = -errno;
 	BITTERS_SPI_LOG("failed to set spi word size (%s)", strerror(errno));
 	goto failed;
@@ -122,8 +125,9 @@ bitters_spi_enable(bitters_spi_t *spi, bitters_spi_cfg_t *cfg)
 	goto failed;
     }
 
-    spi->word  = cfg->word;
-    spi->speed = cfg->speed;
+    spi->word     = cfg->word;
+    spi->speed    = cfg->speed;
+    spi->transfer = cfg->transfer;
     
     BITTERS_SPI_LOG("SPI device %d enabled (using: %s)", spi->id, path);
     
@@ -172,11 +176,22 @@ bitters_spi_set_speed(bitters_spi_t *spi, uint32_t speed)
     return 0;
 }
 
+int
+bitters_spi_set_wordsize(bitters_spi_t *spi, uint8_t word)
+{
+    if (spi->word == word)
+	return 0;
+	
+    BITTERS_SPI_LOG("changing word size %d -> %d", spi->word, word);
+    spi->word = word;
+
+    return 0;
+}
 
 
 int
-bitters_spi_transfert(bitters_spi_t *spi,
-	const struct bitters_spi_transfert *xfr, unsigned int count)
+bitters_spi_transfer(bitters_spi_t *spi,
+	const struct bitters_spi_transfer *xfr, unsigned int count)
 {
     struct spi_ioc_transfer tr[count];
     for (unsigned int i = 0 ; i < count ; i++) {

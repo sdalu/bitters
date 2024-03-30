@@ -68,7 +68,7 @@ It need to be configured at boot time, using either:
 * `bitters_i2c_enable`: enable and configure i2c
 * `bitters_i2c_disable`: disable i2c
 * `bitters_i2c_set_speed`: set i2c bus speed (not supported on linux)
-* `bitters_i2c_transfert`: perform i2c transfert
+* `bitters_i2c_transfer`: perform i2c transfer
 
 SPI
 ---
@@ -77,7 +77,8 @@ SPI
 * `bitters_spi_enable`: enable and configure spi
 * `bitters_spi_disable`: disable spi
 * `bitters_spi_set_speed`: set spi bus speed
-* `bitters_spi_transfert`: perform spi transfert
+* `bitters_spi_set_wordsize`: set spi word size
+* `bitters_spi_transfer`: perform spi transfer
 
 
 
@@ -123,9 +124,9 @@ int main() {
 
   struct bitters_spi_cfg spi0_cfg = {
     .mode      = BITTERS_SPI_MODE_0,
-    .transfert = BITTERS_SPI_TRANSFERT_MSB,
+    .transfer  = BITTERS_SPI_TRANSFER_MSB,
     .word      = BITTERS_SPI_WORDSIZE(8),
-    .speed     =  3000000,
+    .speed     = 3000000,
   };
 
   bitters_init();
@@ -139,11 +140,11 @@ int main() {
   bitters_gpio_pin_write(&reset, 0);
   
   uint8_t data[8];
-  const struct bitters_spi_transfert xfr[] = {
+  const struct bitters_spi_transfer xfr[] = {
     { .tx = "cmd", .len = 3            },
     { .rx = data,  .len = sizeof(data) }
   };
-  bitters_spi_transfert(&spi0, xfr, 2);
+  bitters_spi_transfer(&spi0, xfr, 2);
 
   return 0;
 }
