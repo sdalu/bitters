@@ -30,6 +30,10 @@ _bitters_sigirq(int a) {
 int 
 bitters_init(void) 
 {
+    // Allows calling init multiple times
+    static unsigned int initialized = 0;
+    if (initialized++) { return 0; }
+	
     int rc = 0;
 
 #if defined(BITTERS_WITH_THREADS)
@@ -77,7 +81,7 @@ bitters_init(void)
 
     /* Job's done */
     return rc;
-}    
+}
 
 
 int
