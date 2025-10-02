@@ -468,8 +468,8 @@ bitters_gpio_pin_enable(bitters_gpio_pin_t *pin, bitters_gpio_cfg_t *cfg)
     }
     
     // Store file descriptor
+    //  (can be useful: req.event_buffer_size)
     pin->fd = req.fd;
-    req.event_buffer_size;
     
     // Set interrupt handling status
     if (cfg->interrupt != BITTERS_GPIO_INTERRUPT_DISABLED) {

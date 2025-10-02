@@ -172,7 +172,7 @@ typedef struct bitters_gpio_cfg {
  */
 typedef struct bitters_gpio_pin {
     const int   id;			/**< pin id			*/
-    const char const *ctrl_devname;	/**< controller device name	*/
+    const char *ctrl_devname;		/**< controller device name	*/
     /* private */
     uint8_t flags;			// Flags for configuration state
     struct bitters_gpio_ctrl *ctrl;	// Back pointer on controller
