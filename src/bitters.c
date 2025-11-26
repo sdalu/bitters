@@ -15,62 +15,19 @@
 #include "bitters/spi.h"
 #include "bitters/i2c.h"
 
-#if defined(BITTERS_WITH_THREADS)
-#include <pthread.h>
-#include <signal.h>
-#endif
-
-
-static void
-_bitters_sigirq(int a) {
-    /* Nothing */
-}
-
-
-int 
-bitters_init(void) 
+int
+bitters_init(void)
 {
     // Allows calling init multiple times
     static unsigned int initialized = 0;
     if (initialized++) { return 0; }
-	
-    int rc = 0;
 
-#if defined(BITTERS_WITH_THREADS)
-    /* Install dummy signal handler (to have interrupted system call) */
-    struct sigaction sigact = { .sa_handler = _bitters_sigirq };
-    struct sigaction oldsigact;
-    rc = sigaction(BITTERS_SIGIRQ, &sigact, &oldsigact);
-    if (rc < 0) {
-	BITTERS_LOG("failed to install signal hander for %s",
-		    strsignal(BITTERS_SIGIRQ));
-	return -errno;
-    }    
-    BITTERS_ASSERT((oldsigact.sa_handler   == NULL) &&
-		   (oldsigact.sa_sigaction == NULL));
-    if ((oldsigact.sa_handler   != NULL) ||
-	(oldsigact.sa_sigaction != NULL)) {
-	// Restore original signal handler
-	sigaction(BITTERS_SIGIRQ, &oldsigact, NULL);
-	// Warn about it
-	char *signame = strsignal(BITTERS_SIGIRQ);
-	fprintf(stderr,
-	"\n"
-	"bitters: process is already intercepting %s\n"
-	"       | orignal handler has been restored\n"
-	"       | you can either:\n"
-	"       |   * compile defining BITTERS_SIGIRQ to another signal\n"
-	"       |   * change your program so that %s is free to be used\n"
-	"       |   * don't use bitters IRQ callback\n"
-	"\n", signame, signame);
-	return -EBUSY;
-    }
-#endif
+    int rc = 0;
 
     /* Initialize GPIO */
     if ((rc = bitters_gpio_init()) < 0)
 	return rc;
-	
+
     /* Initialize SPI */
     if ((rc = bitters_spi_init()) < 0)
 	return rc;

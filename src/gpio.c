@@ -123,9 +123,15 @@ static LIST_HEAD(, bitters_gpio_ctrl) bitters_gpio_ctrls =
     LIST_HEAD_INITIALIZER(bitters_gpio_ctrls);
 
 
-    
+
 
 /*== Internal functions ================================================*/
+
+static void
+_bitters_gpio_sigirq(int a) {
+    /* Nothing */
+}
+
 
 static int
 _bitters_gpio_pin_disassociate_ctrl(bitters_gpio_pin_t *pin)
@@ -355,6 +361,37 @@ _bitters_gpio_warn_about_hardware_config(void) {
 int
 bitters_gpio_init(void)
 {
+#if defined(BITTERS_WITH_GPIO_IRQ) && defined(BITTERS_WITH_THREADS)
+    /* Install dummy signal handler (to have interrupted system call) */
+    struct sigaction sigact = { .sa_handler = _bitters_gpio_sigirq };
+    struct sigaction oldsigact;
+    int rc = sigaction(BITTERS_SIGIRQ, &sigact, &oldsigact);
+    if (rc < 0) {
+	BITTERS_LOG("failed to install signal hander for %s",
+		    strsignal(BITTERS_SIGIRQ));
+	return -errno;
+    }
+    BITTERS_ASSERT((oldsigact.sa_handler   == NULL) &&
+		   (oldsigact.sa_sigaction == NULL));
+    if ((oldsigact.sa_handler   != NULL) ||
+	(oldsigact.sa_sigaction != NULL)) {
+	// Restore original signal handler
+	sigaction(BITTERS_SIGIRQ, &oldsigact, NULL);
+	// Warn about it
+	char *signame = strsignal(BITTERS_SIGIRQ);
+	fprintf(stderr,
+	"\n"
+	"bitters: process is already intercepting %s\n"
+	"       | orignal handler has been restored\n"
+	"       | you can either:\n"
+	"       |   * compile defining BITTERS_SIGIRQ to another signal\n"
+	"       |   * change your program so that %s is free to be used\n"
+	"       |   * don't use bitters IRQ callback\n"
+	"\n", signame, signame);
+	return -EBUSY;
+    }
+#endif
+
     BITTERS_GPIO_WARN_ABOUT_HARDWARE_CONFIG();
     return 0;
 }
