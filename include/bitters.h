@@ -47,13 +47,13 @@
 int bitters_init(void);
 
 /**
- * Try to reduce lattency of IO access.
+ * Try to reduce latency of IO access.
  * It will raise scheduling priority and lock page in memory
  * to avoid swapping.
  *
  * @return < 0 in case of error (-errno)
  */
-int bitters_reduced_lattency(void);
+int bitters_reduced_latency(void);
 
 /** @} */
 

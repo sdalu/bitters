@@ -85,7 +85,7 @@ bitters_init(void)
 
 
 int
-bitters_reduced_lattency(void) {
+bitters_reduced_latency(void) {
     /* Change scheduler priority to be more "real-time" */
     struct sched_param sp = {
         .sched_priority = sched_get_priority_max(SCHED_FIFO),
