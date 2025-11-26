@@ -9,15 +9,15 @@ portability and performance (no devmem, no sysfs)
 * The include `bitters/rpi.h` define the pin mapping found on Raspberry Pi
 * License is Apache-2 except for queue.h file which is BSD-3-Clause
 * Source require GNU extention to C library, compile with `-D_GNU_SOURCE`
-* If using threads, this library must be compiled with the 
+* If using threads, this library must be compiled with the
   `-DBITTERS_WITH_THREADS` flag
 * If irq callback processing is required (which is generally the case
   when porting straight from device manufacturer SDK) you need to
-  compile with the `-DBITTERS_WITH_GPIO_IRQ -DBITTERS_WITH_THREADS` flags 
-  and add thread support,
-  this will also internally use `SIGUSR1` (which can be changed by defining
-  `BITTERS_SIGIRQ` to the desired signal).
-* Extra log and debugging can be enabled by defininig 
+  compile with the `-DBITTERS_WITH_GPIO_IRQ -DBITTERS_WITH_THREADS` flags
+  and add thread support, this will also internally use `SIGUSR1`
+  (which can be changed by defining `BITTERS_SIGIRQ` to the desired signal)
+  to notify processing thread of callback setting modifications.
+* Extra log and debugging can be enabled by defininig
   `BITTERS_{GPIO,SPI,I2C}_WITH_ASSERT`, `BITTERS_{GPIO,SPI,I2C}_WITH_LOG`.
 * All hardware/software configuration warnings can be disabled at compile time
   by defining `BITTERS_SILENCE_WARNING`, or at runtime using
@@ -39,13 +39,13 @@ https://blog.michael.franzl.name/2016/11/10/setting-i2c-speed-raspberry-pi/
 GPIO
 ----
 On Linux, the gpio pull strengh is considered to be part of the hardware
-platform. 
+platform.
 It need to be configured at boot time, using either
 * on Raspberry Pi
   * `raspi-gpio` commande, run `raspi-gpio help` for details.
      Example for pull up: `raspi-gpio set _pin_ pu`
   * `config.txt` bootloader config, see rpi documentation `config-txt/gpio.md`
-     for details. 
+     for details.
 	 Example for pull up: adding entry `gpio=_pin-list_=pu`
 * device-tree
 
@@ -62,11 +62,11 @@ It need to be configured at boot time, using either
 I2C
 ---
 On Linux, the I2C bus speed is considered to be part of the hardware
-platform, using a fixed speed based on the lowest common speed of 
-the I2C devices attached to the bus. 
+platform, using a fixed speed based on the lowest common speed of
+the I2C devices attached to the bus.
 It need to be configured at boot time, using either:
 * on Raspberry Pi
-  * `config.txt`: adding the `i2c_arm_baudrate=xxxx` parameter to the 
+  * `config.txt`: adding the `i2c_arm_baudrate=xxxx` parameter to the
    `dtparam=i2c_arm=on` entry
 * modprobe: passing the `baudrate=xxx` parameter to the driver kernel module
 * device-tree: the `clock-frequency` parameter found in
@@ -150,7 +150,7 @@ int main() {
   bitters_gpio_pin_write(&reset, 1);
   bitters_delay_us(100);
   bitters_gpio_pin_write(&reset, 0);
-  
+
   uint8_t data[8];
   const struct bitters_spi_transfer xfr[] = {
     { .tx = "cmd", .len = 3            },
@@ -196,3 +196,4 @@ if (BITTERS_GPIO_IRQ_FD(pin) >= 0) {
     }
 }
 ~~~
+
