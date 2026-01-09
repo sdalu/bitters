@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019
+ * Copyright (c) 2019-2020
  * Stephane D'Alu, Inria Chroma / Inria Agora, INSA Lyon, CITI Lab.
  *
  * SPDX-License-Identifier: Apache-2.0
@@ -55,7 +55,7 @@ typedef struct bitters_i2c_cfg {
 
 /**
  * I2C address.
- * @note if it is a 10-bit address, the flag BITTERS_I2C_ADDR_10 must 
+ * @note if it is a 10-bit address, the flag BITTERS_I2C_ADDR_10 must
  *       be or-ed with it.
  */
 typedef uint16_t bitters_i2c_addr_t;

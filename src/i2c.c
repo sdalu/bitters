@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020
+ * Copyright (c) 2019-2020,2024
  * Stephane D'Alu, Inria Chroma / Inria Agora, INSA Lyon, CITI Lab.
  *
  * SPDX-License-Identifier: Apache-2.0
@@ -106,7 +106,7 @@ bitters_i2c_enable(bitters_i2c_t *i2c, bitters_i2c_cfg_t *cfg)
 	BITTERS_I2C_LOG("failed to build path for i2cdev");
 	goto failed;
     }
-    
+
     i2c->fd = open(path, O_RDWR);
     if (i2c->fd < 0) {
 	rc = -errno;
@@ -135,16 +135,16 @@ bitters_i2c_enable(bitters_i2c_t *i2c, bitters_i2c_cfg_t *cfg)
 	goto failed;
     }
 
-    /* Set speed 
+    /* Set speed
      */
     if (cfg->speed != 0) {
 	BITTERS_I2C_WARN_ABOUT_HARDWARE_CONFIG();
 	BITTERS_I2C_LOG("ignoring i2c speed");
     }
-    
-    
+
+
     BITTERS_I2C_LOG("I2C device %d enabled (using: %s)", i2c->id, path);
-    
+
     return 0;
 
  failed:
@@ -178,7 +178,7 @@ bitters_i2c_disable(bitters_i2c_t *i2c)
 
 
 
-int 
+int
 bitters_i2c_set_speed(bitters_i2c_t *i2c, uint32_t speed)
 {
     BITTERS_I2C_WARN_ABOUT_HARDWARE_CONFIG();
@@ -200,10 +200,10 @@ bitters_i2c_transfert(bitters_i2c_t *i2c, bitters_i2c_addr_t addr,
     uint16_t i2c_flags = 0;
 
     BITTERS_I2C_LOG("transferring %d msg to 0x%02x", msgset.nmsgs, i2c_addr);
-    
+
     if (i2c_addr & BITTERS_I2C_ADDR_10)
 	i2c_flags |= I2C_M_TEN;
-    
+
     for (unsigned int i = 0 ; i < count ; i++) {
 	memset(&msg[i], 0, sizeof(struct i2c_msg));
 	msg[i].addr  = i2c_addr;

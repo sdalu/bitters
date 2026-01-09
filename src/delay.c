@@ -36,9 +36,9 @@ bitters_delay_msec(uint16_t ms) {
     sigfillset(&mask);
 #if defined(BITTERS_WITH_THREADS)
     pthread_sigmask(SIG_SETMASK, &mask, &oldmask);
-#else 
+#else
     sigprocmask(SIG_SETMASK, &mask, &oldmask);
-#endif   
+#endif
     usleep(ms * 1000);
 #if defined(BITTERS_WITH_THREADS)
     pthread_sigmask(SIG_SETMASK, &oldmask, NULL);

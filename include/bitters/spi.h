@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019,2023
+ * Copyright (c) 2019-2020,2024
  * Stephane D'Alu, Inria Chroma / Inria Agora, INSA Lyon, CITI Lab.
  *
  * SPDX-License-Identifier: Apache-2.0
@@ -33,7 +33,7 @@
 #define BITTERS_SPI_TRANSFER_LSB		1
 
 /**
- * SPI word size. 
+ * SPI word size.
  * Usual value: 8, 16.
  */
 #define BITTERS_SPI_WORDSIZE(x)			(x)
@@ -91,7 +91,7 @@ typedef struct bitters_spi {
 typedef struct bitters_spi_cfg {
     uint8_t  mode;	/**< Bus mode: SPI_MODE_{0,1,2,3} */
     uint32_t speed;	/**< Bus speed in Hz		*/
-    uint8_t  word;	/**< Size of SPI word: 8, 16	*/ 
+    uint8_t  word;	/**< Size of SPI word: 8, 16	*/
     uint8_t  transfer;  /**< Transfer mode: LSB or MSB	*/
 } bitters_spi_cfg_t;
 

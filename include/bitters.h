@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019
+ * Copyright (c) 2019-2020,2025
  * Stephane D'Alu, Inria Chroma / Inria Agora, INSA Lyon, CITI Lab.
  *
  * SPDX-License-Identifier: Apache-2.0
@@ -10,7 +10,7 @@
 
 /**
  * @file  bitters.c
- * @brief Various 
+ * @brief Various
  *
  * @addtogroup Bitters
  * @{

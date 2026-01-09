@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023
+ * Copyright (c) 2019-2020,2024-2025
  * Stephane D'Alu, Inria Chroma / Inria Agora, INSA Lyon, CITI Lab.
  *
  * SPDX-License-Identifier: Apache-2.0
@@ -151,7 +151,7 @@ struct bitters_gpio_ctrl;
 struct bitters_gpio_pin;
 
 typedef void (*bitters_gpio_irq_cb_t)(struct bitters_gpio_pin *pin, void *args);
-    
+
 
 /**
  * GPIO pin configuration.

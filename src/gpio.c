@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019
+ * Copyright (c) 2019-2020,2024-2025
  * Stephane D'Alu, Inria Chroma / Inria Agora, INSA Lyon, CITI Lab.
  *
  * SPDX-License-Identifier: Apache-2.0
@@ -79,7 +79,7 @@
                         ((x) == BITTERS_GPIO_INTERRUPT_RISING_EDGE ) || \
                         ((x) == BITTERS_GPIO_INTERRUPT_FALLING_EDGE) || \
                         ((x) == BITTERS_GPIO_INTERRUPT_BOTH_EDGE   ))
-	
+
 #define BITTERS_GPIO_ASSERT_PIN_ASSOCIATED(pin)				\
     BITTERS_GPIO_ASSERT((pin != NULL) && (pin->ctrl != NULL))
 
@@ -101,8 +101,8 @@
 	    return -EINVAL;						\
 	}								\
     } while(0)
-    
-    
+
+
 /*== Structures ========================================================*/
 
 struct bitters_gpio_ctrl {
@@ -192,8 +192,8 @@ _bitters_gpio_ctrl_create(const char *devname)
     char                     *name    = NULL;
     char                     *devpath = NULL;
     struct bitters_gpio_ctrl *ctrl    = NULL;
-    
-    /* Create a new controller 
+
+    /* Create a new controller
      */
     // Allocate memory
     ctrl = calloc(1, sizeof(struct bitters_gpio_ctrl));
@@ -209,7 +209,7 @@ _bitters_gpio_ctrl_create(const char *devname)
 	BITTERS_GPIO_LOG("failed to allocate memory for gpio name");
 	goto failed;
     }
-	
+
     // Build device path
     rc = asprintf(&devpath, "/dev/%s", devname);
     if (rc < 0) {
@@ -285,7 +285,7 @@ _bitters_gpio_pin_associate_ctrl(bitters_gpio_pin_t *pin)
     int                       rc      = -EINVAL;
     struct bitters_gpio_ctrl *ctrl    = NULL;
 
-    /* Lookup for existing controller 
+    /* Lookup for existing controller
      */
     for (ctrl =  LIST_FIRST(&bitters_gpio_ctrls) ; ctrl ; LIST_NEXT(ctrl, entries)) {
 	if (! strcmp(ctrl->name, pin->ctrl_devname)) {
@@ -294,8 +294,8 @@ _bitters_gpio_pin_associate_ctrl(bitters_gpio_pin_t *pin)
 	    goto associate;
 	}
     }
-    
-    /* Create a new controller 
+
+    /* Create a new controller
      */
     ctrl = _bitters_gpio_ctrl_create(pin->ctrl_devname);
     if (ctrl == NULL) {
@@ -305,9 +305,9 @@ _bitters_gpio_pin_associate_ctrl(bitters_gpio_pin_t *pin)
 
     // Attach to controler list
     LIST_INSERT_HEAD(&bitters_gpio_ctrls, ctrl, entries);
-    
+
     // Associate
- associate:    
+ associate:
 #if defined(BITTERS_WITH_GPIO_IRQ) && defined(BITTERS_WITH_THREADS)
     BITTERS_GPIO_ASSERT(pin->id < ctrl->lines);
 #endif
@@ -351,7 +351,7 @@ _bitters_gpio_warn_about_hardware_config(void) {
 }
 
 #if !defined(BITTERS_SILENCE_WARNING    ) &&				\
-    !defined(BITTERS_SILENCE_RPI_WARNING) 
+    !defined(BITTERS_SILENCE_RPI_WARNING)
 #  define BITTERS_GPIO_WARN_ABOUT_HARDWARE_CONFIG()			\
     _bitters_gpio_warn_about_hardware_config()
 #else
@@ -407,7 +407,7 @@ bitters_gpio_pin_enable(bitters_gpio_pin_t *pin, bitters_gpio_cfg_t *cfg)
 {
     BITTERS_GPIO_ASSERT_PIN(pin);
     BITTERS_GPIO_ENSURE_ASSOCIATED_PIN(pin);
-    
+
     // Already enabled ?
     if (pin->fd >= 0)
 	return 0;
@@ -452,7 +452,7 @@ bitters_gpio_pin_enable(bitters_gpio_pin_t *pin, bitters_gpio_cfg_t *cfg)
 	    return -EINVAL;
 	}
 	break;
-	
+
     case BITTERS_GPIO_DIR_OUTPUT:
 	flags |= GPIO_V2_LINE_FLAG_OUTPUT;
 	switch(cfg->mode) {
@@ -499,7 +499,7 @@ bitters_gpio_pin_enable(bitters_gpio_pin_t *pin, bitters_gpio_cfg_t *cfg)
 	}
     };
     strncpy(req.consumer, cfg->label, sizeof(req.consumer));
-    
+
     // Call ioctl
     int rc = ioctl(pin->ctrl->fd, GPIO_V2_GET_LINE_IOCTL, &req);
     if (rc < 0) {
@@ -507,16 +507,16 @@ bitters_gpio_pin_enable(bitters_gpio_pin_t *pin, bitters_gpio_cfg_t *cfg)
 			 " for pin %d (%s)", pin->id, strerror(errno));
 	return -errno;
     }
-    
+
     // Store file descriptor
     //  (can be useful: req.event_buffer_size)
     pin->fd = req.fd;
-    
+
     // Set interrupt handling status
     if (cfg->interrupt != BITTERS_GPIO_INTERRUPT_DISABLED) {
 	pin->flags |= GPIO_PIN_FLAG_INTERRUPT;
     }
-    
+
     // Job's done
     BITTERS_GPIO_LOG("pin %d (%s) enabled (fd=%d)",
 		     pin->id, cfg->label, pin->fd);
@@ -546,7 +546,7 @@ bitters_gpio_pin_disable(bitters_gpio_pin_t *pin)
     // Mark as disabled
     pin->flags = 0;
     pin->fd    = -1;
-    
+
     // Job's done
     return 0;
 }
@@ -570,7 +570,7 @@ bitters_gpio_pin_read(bitters_gpio_pin_t *pin, int *val)
 
     if (val != NULL)
 	*val = (values.bits & (1 << 0)) ? 1 : 0;
-    
+
     return 0;
 }
 
@@ -642,7 +642,7 @@ bitters_gpio_irq_callback(bitters_gpio_pin_t *pin,
 {
     BITTERS_GPIO_ASSERT_PIN(pin);
     BITTERS_GPIO_ENSURE_INTERRUPT_PIN(pin);
-    
+
 #if defined(BITTERS_WITH_GPIO_IRQ) && defined(BITTERS_WITH_THREADS)
     /* Save callback information */
     pin->irq_cb      = cb;
@@ -655,7 +655,7 @@ bitters_gpio_irq_callback(bitters_gpio_pin_t *pin,
 
     /* Save pin in controller table */
     pin->ctrl->pins[pin->id] = pin;
-    
+
     /* Notify irq processing thread of changes */
     int rc = pthread_kill(pin->ctrl->irq_thread, BITTERS_SIGIRQ);
     if (rc < 0) {
@@ -672,7 +672,7 @@ bitters_gpio_irq_callback(bitters_gpio_pin_t *pin,
 
 
 
-/* 
+/*
  * Local Variables:
  * c-basic-offset: 4
  * End:

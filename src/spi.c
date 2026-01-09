@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020,2023
+ * Copyright (c) 2019-2020,2024
  * Stephane D'Alu, Inria Chroma / Inria Agora, INSA Lyon, CITI Lab.
  *
  * SPDX-License-Identifier: Apache-2.0
@@ -80,7 +80,7 @@ _bitters_spi_warn_about_bufsize_config(void) {
 int
 bitters_spi_init(void)
 {
-    BITTERS_SPI_WARN_ABOUT_BUFSIZE_CONFIG();	    
+    BITTERS_SPI_WARN_ABOUT_BUFSIZE_CONFIG();
     return 0;
 }
 
@@ -103,7 +103,7 @@ bitters_spi_enable(bitters_spi_t *spi, bitters_spi_cfg_t *cfg)
     int ce = 0;
     if (spi->ce >= 0)
 	ce = spi->ce;
-    
+
     char path[18]; /* Enough room for: /dev/spidev00.00 */
     rc = snprintf(path, sizeof(path), "/dev/spidev%d.%d", spi->id, ce);
     if ((rc < 0) || (rc >= sizeof(path))) {
@@ -111,7 +111,7 @@ bitters_spi_enable(bitters_spi_t *spi, bitters_spi_cfg_t *cfg)
 	BITTERS_SPI_LOG("failed to build path for spidev");
 	goto failed;
     }
-    
+
     spi->fd = open(path, O_RDWR);
     if (spi->fd < 0) {
 	rc = -errno;
@@ -139,8 +139,8 @@ bitters_spi_enable(bitters_spi_t *spi, bitters_spi_cfg_t *cfg)
 	rc = -errno;
 	BITTERS_SPI_LOG("failed to set spi word size (%s)", strerror(errno));
 	goto failed;
-    }	
-	
+    }
+
     rc = ioctl(spi->fd, SPI_IOC_WR_MAX_SPEED_HZ, &cfg->speed);
     if (rc < 0) {
 	rc = -errno;
@@ -151,9 +151,9 @@ bitters_spi_enable(bitters_spi_t *spi, bitters_spi_cfg_t *cfg)
     spi->word     = cfg->word;
     spi->speed    = cfg->speed;
     spi->transfer = cfg->transfer;
-    
+
     BITTERS_SPI_LOG("SPI device %d enabled (using: %s)", spi->id, path);
-    
+
     return 0;
 
  failed:
@@ -192,7 +192,7 @@ bitters_spi_set_speed(bitters_spi_t *spi, uint32_t speed)
 {
     if (spi->speed == speed)
 	return 0;
-	
+
     BITTERS_SPI_LOG("changing speed %d -> %d", spi->speed, speed);
     spi->speed = speed;
 
@@ -204,7 +204,7 @@ bitters_spi_set_wordsize(bitters_spi_t *spi, uint8_t word)
 {
     if (spi->word == word)
 	return 0;
-	
+
     BITTERS_SPI_LOG("changing word size %d -> %d", spi->word, word);
     spi->word = word;
 
@@ -225,7 +225,7 @@ bitters_spi_transfer(bitters_spi_t *spi,
 	tr[i].bits_per_word = spi->word;
 	tr[i].speed_hz      = spi->speed;
     }
-    
+
     int rc = ioctl(spi->fd, SPI_IOC_MESSAGE(count), &tr);
     if (rc < 0) {
 	rc = -errno;
