@@ -29,31 +29,31 @@
  */
 #define BITTERS_GPIO_DIR_INPUT 				0
 /**
- * Ouput direction for GPIO pin
+ * Output direction for GPIO pin
  */
 #define BITTERS_GPIO_DIR_OUTPUT				1
 
 
 /**
  * Use behaviour defined by hardware
- * See: - raspio-gpio  (see: raspi-gpio help)
+ * See: - raspi-gpio  (see: raspi-gpio help)
  *      - device-tree with brcm,pull (see: brcm,bcm2835-gpio.txt)
  *      - config.txt (see: config-txt/gpio.md)
  */
 #define BITTERS_GPIO_MODE_DEFAULT			0
 /**
- * Configure open drain beahviour for GPIO pin
+ * Configure open drain behaviour for GPIO pin
  */
 #define BITTERS_GPIO_MODE_OPEN_DRAIN			1
 /**
- * Configure open drain source for GPIO pin
+ * Configure open source behaviour for GPIO pin
  */
 #define BITTERS_GPIO_MODE_OPEN_SOURCE			2
 
 
 /**
  * Use behaviour defined by hardware
- * See: - raspio-gpio  (see: raspi-gpio help)
+ * See: - raspi-gpio  (see: raspi-gpio help)
  *      - device-tree with brcm,pull (see: brcm,bcm2835-gpio.txt)
  *      - config.txt (see: config-txt/gpio.md)
  */
@@ -85,7 +85,7 @@
  */
 #define BITTERS_GPIO_INTERRUPT_FALLING_EDGE		0x2
 /**
- * Process interrupt on raising and falling edge
+ * Process interrupt on rising and falling edge
  */
 #define BITTERS_GPIO_INTERRUPT_BOTH_EDGE		0x3
 
@@ -99,7 +99,7 @@
 /**
  * Value to use when polling on gpio
  */
-#define BITTERS_GPIO_POLL_EVENTS			POLLPRI | POLLIN
+#define BITTERS_GPIO_POLL_EVENTS			(POLLPRI | POLLIN)
 
 
 /*
@@ -139,7 +139,7 @@
  * ~~~
  */
 #define BITTERS_GPIO_IRQ_FD(_pin)					\
-    ((pin->flags & GPIO_PIN_FLAG_INTERRUPT) ? (_pin)->fd : -1)
+    (((_pin)->flags & GPIO_PIN_FLAG_INTERRUPT) ? (_pin)->fd : -1)
 
 
 
@@ -162,7 +162,7 @@ typedef struct bitters_gpio_cfg {
     uint8_t  mode;	/**<  O: gpio mode (open drain, open source, ...) */
     uint8_t  bias;	/**< I : gpio bias (pull-up, pull-down, ...)	  */
     uint8_t  interrupt;	/**< I : interrupt processing 			  */
-    uint32_t debounce;  /**< I :debounce for input, 0 = none              */
+    uint32_t debounce;  /**< I : debounce for input, 0 = none             */
     int      defval;	/**<  O: default value when enabling output 	  */
 } bitters_gpio_cfg_t;
 
@@ -184,6 +184,13 @@ typedef struct bitters_gpio_pin {
 } bitters_gpio_pin_t;
 
 
+/**
+ * Initialize the GPIO subsystem.
+ * Normally called automatically by bitters_init(); call it directly only
+ * if you use the GPIO API without the rest of the library.
+ *
+ * @return < 0 in case of error (-errno)
+ */
 int bitters_gpio_init(void);
 
 /**
@@ -233,15 +240,15 @@ int bitters_gpio_pin_write(bitters_gpio_pin_t *pin, int value);
 int bitters_gpio_irq_wait(bitters_gpio_pin_t *pin);
 
 /**
- * Fill a pollfd structure, allowing to explicitely perform
- * a poll/ppoll request combining several file descriptor
+ * Fill a pollfd structure, allowing to explicitly perform
+ * a poll/ppoll request combining several file descriptors
  * @note Undefined behaviour if used with bitters_gpio_irq_callback
  *
  * @param pin 		pin identification
  * @param pfd[out]      pointer to a pollfd structure
  * @return -EINVAL	if pin was not enabled for interrupt
  */
-int bitters_gpio_irq_fill_poolfd(bitters_gpio_pin_t *pin, struct pollfd *pfd);
+int bitters_gpio_irq_fill_pollfd(bitters_gpio_pin_t *pin, struct pollfd *pfd);
 
 #if defined(BITTERS_WITH_THREADS) || defined(__DOXYGEN__)
 /**

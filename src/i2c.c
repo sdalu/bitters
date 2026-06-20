@@ -187,8 +187,8 @@ bitters_i2c_set_speed(bitters_i2c_t *i2c, uint32_t speed)
 
 
 int
-bitters_i2c_transfert(bitters_i2c_t *i2c, bitters_i2c_addr_t addr,
-	const struct bitters_i2c_transfert *xfr, unsigned int count)
+bitters_i2c_transfer(bitters_i2c_t *i2c, bitters_i2c_addr_t addr,
+	const struct bitters_i2c_transfer *xfr, unsigned int count)
 {
     struct i2c_msg msg[count];
     struct i2c_rdwr_ioctl_data msgset = {
@@ -201,7 +201,7 @@ bitters_i2c_transfert(bitters_i2c_t *i2c, bitters_i2c_addr_t addr,
 
     BITTERS_I2C_LOG("transferring %d msg to 0x%02x", msgset.nmsgs, i2c_addr);
 
-    if (i2c_addr & BITTERS_I2C_ADDR_10)
+    if (addr & BITTERS_I2C_ADDR_10)
 	i2c_flags |= I2C_M_TEN;
 
     for (unsigned int i = 0 ; i < count ; i++) {
@@ -209,9 +209,9 @@ bitters_i2c_transfert(bitters_i2c_t *i2c, bitters_i2c_addr_t addr,
 	msg[i].addr  = i2c_addr;
 	msg[i].flags = i2c_flags;
 	switch (xfr[i].dir) {
-	case BITTERS_I2C_TRANSFERT_WRITE:
+	case BITTERS_I2C_TRANSFER_WRITE:
 	    break;
-	case BITTERS_I2C_TRANSFERT_READ:
+	case BITTERS_I2C_TRANSFER_READ:
 	    msg[i].flags |= I2C_M_RD;
 	    break;
 	default:
@@ -220,10 +220,10 @@ bitters_i2c_transfert(bitters_i2c_t *i2c, bitters_i2c_addr_t addr,
 	msg[i].len   = xfr[i].len;
 	msg[i].buf   = xfr[i].buf;
 
-	BITTERS_I2C_LOG("msg[%d].%c @ 0x%08x [len=%d]",
+	BITTERS_I2C_LOG("msg[%u].%c @ %p [len=%zu]",
 			i,
 			(msg[i].flags & I2C_M_RD) ? 'r' : 'w',
-			xfr[i].buf, xfr[i].len);
+			(void *)xfr[i].buf, xfr[i].len);
     }
 
     int rc = ioctl(i2c->fd, I2C_RDWR, &msgset);

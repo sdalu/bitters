@@ -100,12 +100,19 @@ typedef struct bitters_spi_cfg {
  * SPI transfer chunk.
  */
 struct bitters_spi_transfer {
-    uint8_t *tx;	/**< RX buffer or NULL 		*/
-    uint8_t *rx;	/**< TX buffer ot NULL 		*/
+    uint8_t *tx;	/**< TX buffer or NULL 		*/
+    uint8_t *rx;	/**< RX buffer or NULL 		*/
     size_t   len;	/**< buffer size		*/
 };
 
 
+/**
+ * Initialize the SPI subsystem.
+ * Normally called automatically by bitters_init(); call it directly only
+ * if you use the SPI API without the rest of the library.
+ *
+ * @return < 0 in case of error (-errno)
+ */
 int bitters_spi_init(void);
 
 /**
@@ -127,6 +134,7 @@ int bitters_spi_disable(bitters_spi_t *spi);
 
 /**
  * Change speed of SPI bus.
+ * @note The new speed takes effect on the next transfer.
  *
  * @param spi		SPI interface
  * @param speed		bus speed in Hz
@@ -136,19 +144,20 @@ int bitters_spi_set_speed(bitters_spi_t *spi, uint32_t speed);
 
 /**
  * Change word size of SPI bus.
+ * @note The new word size takes effect on the next transfer.
  *
  * @param spi		SPI interface
- * @param word		word size
+ * @param word		word size (usually 8 or 16)
  * @return < 0 in case of error (-errno)
  */
 int bitters_spi_set_wordsize(bitters_spi_t *spi, uint8_t word);
 
 /**
- * Change speed of SPI bus.
+ * Perform an SPI transfer.
  *
  * @param spi		SPI interface
- * @param xfr		chunk to be transfered
- * @param count		number of transfered chunk
+ * @param xfr		chunks to be transferred
+ * @param count		number of transferred chunks
  * @return < 0 in case of error (-errno)
  */
 int bitters_spi_transfer(bitters_spi_t *spi,

@@ -87,7 +87,7 @@ Enable additional compilation flags to enable assertions and logging.
 
 ### Suppress Warnings
 
-Several configuration warning are emitted at run-time to notify
+Several configuration warnings are emitted at run-time to notify
 of common source of misconfiguration.
 
 Warnings can be removed at build-time using compilation flag or at run-time
@@ -109,9 +109,9 @@ https://michael.franzl.name/blog/posts/2016-11-10-setting-i2c-speed-raspberry-pi
 
 GPIO
 ----
-On Linux, the gpio pull strengh is considered to be part of the hardware
+On Linux, the gpio pull strength is considered to be part of the hardware
 platform.
-It need to be configured at boot time, using either
+It needs to be configured at boot time, using either
 * on Raspberry Pi
   *  `pinctrl` command (previously `raspi-gpio`), run `pinctrl help` for details.
      Example for pull up: `pinctrl set _pin_ pu`
@@ -140,7 +140,7 @@ On Linux, the I2C bus speed is considered to be part of the hardware
 platform, using a fixed speed based on the lowest common speed of
 the I2C devices attached to the bus.
 
-It need to be configured at boot time, using either:
+It needs to be configured at boot time, using either:
 * on Raspberry Pi
   * `config.txt`: adding the `i2c_arm_baudrate=xxxx` parameter to the
    `dtparam=i2c_arm=on` entry
@@ -148,7 +148,7 @@ It need to be configured at boot time, using either:
 * device-tree: the `clock-frequency` parameter found in
   `brcm,bcm2835-i2c` in case of a Raspberry Pi
 
-## API Functions
+### API Functions
 
 | **Function**              | **Description**                        |
 |---------------------------|----------------------------------------|
@@ -161,7 +161,7 @@ It need to be configured at boot time, using either:
 SPI
 ---
 On linux the SPI max transfer size is by default a page size (4096 bytes),
-you could/should increase this value by addind the `spidev.bufsiz=65536`
+you could/should increase this value by adding the `spidev.bufsiz=65536`
 parameter to the kernel. On a Raspberry Pi, this is done in `/boot/cmdline.txt`
 
 
@@ -180,8 +180,12 @@ Getting started
 ===============
 ~~~sh
 gcc ${bitters}/src/*.c -I ${bitters}/include .... \
-    -D_GNU_SOURCE -DBITTERS_WITH_THREADS -pthread
+    -D_GNU_SOURCE -DBITTERS_WITH_THREADS -DBITTERS_WITH_GPIO_IRQ -pthread
 ~~~
+
+The `-DBITTERS_WITH_GPIO_IRQ` flag is only needed if you use
+`bitters_gpio_irq_callback()` (as in the example below); it requires
+`-DBITTERS_WITH_THREADS`.
 
 Example
 -------
@@ -191,6 +195,7 @@ Example
 #include "bitters/rpi.h"
 #include "bitters/gpio.h"
 #include "bitters/spi.h"
+#include "bitters/delay.h"
 
 void my_irq_callback(bitters_gpio_pin_t *pin, void *args) {
     // irq detected... processing
@@ -230,7 +235,7 @@ int main() {
   bitters_spi_enable(&spi0, &spi0_cfg);
 
   bitters_gpio_pin_write(&reset, 1);
-  bitters_delay_us(100);
+  bitters_delay_usec(100);
   bitters_gpio_pin_write(&reset, 0);
 
   uint8_t data[8];
@@ -261,7 +266,7 @@ struct pollfd pfds[] = {
 // Perform the poll request
 int rc = poll(pfds, __arraycount(pfds), -1);
 if (rc < 0) {
-   // Deal with error (interrupted syscal, ...)
+   // Deal with error (interrupted syscall, ...)
    ....
 }
 

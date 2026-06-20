@@ -252,7 +252,9 @@ _bitters_gpio_ctrl_create(const char *devname)
     // Create IRQ processing thread
     rc = pthread_create(&ctrl->irq_thread, NULL,
 			bitters_gpio_irq_processing, ctrl);
-    if (rc < 0) {
+    if (rc != 0) {
+	/* pthread_* return a positive error number, and don't set errno */
+	errno = rc;
 	BITTERS_GPIO_LOG("failed to create irq processing thread");
 	goto failed;
     }
@@ -271,8 +273,10 @@ _bitters_gpio_ctrl_create(const char *devname)
     free(devpath);
     free(name);
 #if defined(BITTERS_WITH_GPIO_IRQ) && defined(BITTERS_WITH_THREADS)
-    free(ctrl->fds);
-    free(ctrl->pins);
+    if (ctrl != NULL) {
+	free(ctrl->fds);
+	free(ctrl->pins);
+    }
 #endif
     free(ctrl);
     return NULL;
@@ -287,7 +291,7 @@ _bitters_gpio_pin_associate_ctrl(bitters_gpio_pin_t *pin)
 
     /* Lookup for existing controller
      */
-    for (ctrl =  LIST_FIRST(&bitters_gpio_ctrls) ; ctrl ; LIST_NEXT(ctrl, entries)) {
+    for (ctrl =  LIST_FIRST(&bitters_gpio_ctrls) ; ctrl ; ctrl = LIST_NEXT(ctrl, entries)) {
 	if (! strcmp(ctrl->name, pin->ctrl_devname)) {
 	    BITTERS_GPIO_LOG("found instanciated gpio controller (%s)",
 			     ctrl->name);
@@ -623,7 +627,7 @@ bitters_gpio_irq_wait(bitters_gpio_pin_t *pin) {
 
 
 int
-bitters_gpio_irq_fill_poolfd(bitters_gpio_pin_t *pin, struct pollfd *pfd)
+bitters_gpio_irq_fill_pollfd(bitters_gpio_pin_t *pin, struct pollfd *pfd)
 {
     BITTERS_GPIO_ASSERT_PIN(pin);
     BITTERS_GPIO_ENSURE_INTERRUPT_PIN(pin);
@@ -658,8 +662,9 @@ bitters_gpio_irq_callback(bitters_gpio_pin_t *pin,
 
     /* Notify irq processing thread of changes */
     int rc = pthread_kill(pin->ctrl->irq_thread, BITTERS_SIGIRQ);
-    if (rc < 0) {
-	return -errno;
+    if (rc != 0) {
+	/* pthread_* return a positive error number, and don't set errno */
+	return -rc;
     }
 
     /* Job's done */

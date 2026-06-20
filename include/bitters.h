@@ -10,12 +10,18 @@
 
 /**
  * @file  bitters.c
- * @brief Various
+ * @brief Library initialization and global configuration
  *
  * @addtogroup Bitters
  * @{
  */
 
+/**
+ * Logging macro used internally to report errors and debug information.
+ * The default prints to @c stderr (appending a newline) while preserving
+ * @c errno. Define your own before including this header, or on the
+ * compiler command line, to redirect or silence logging.
+ */
 #ifndef BITTERS_LOG
 #include <stdio.h>
 #include <errno.h>
@@ -26,6 +32,11 @@
     } while(0)
 #endif
 
+/**
+ * Assertion macro used internally when assertions are enabled.
+ * Defaults to the standard @c assert(). Define your own before including
+ * this header to override it.
+ */
 #ifndef BITTERS_ASSERT
 #include <assert.h>
 #define BITTERS_ASSERT(x)						\
@@ -33,6 +44,12 @@
 #endif
 
 
+/**
+ * Signal used internally to notify the GPIO IRQ processing thread that the
+ * set of registered callbacks has changed (only relevant when built with
+ * BITTERS_WITH_GPIO_IRQ). Override with @c -DBITTERS_SIGIRQ=SIGNAME if
+ * @c SIGUSR1 is already used by your application.
+ */
 #ifndef BITTERS_SIGIRQ
 #define BITTERS_SIGIRQ SIGUSR1
 #endif

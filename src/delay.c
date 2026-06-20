@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <unistd.h>
 #include <signal.h>
+#include <time.h>
 
 #if defined(BITTERS_WITH_THREADS)
 #include <pthread.h>
@@ -39,7 +40,12 @@ bitters_delay_msec(uint16_t ms) {
 #else
     sigprocmask(SIG_SETMASK, &mask, &oldmask);
 #endif
-    usleep(ms * 1000);
+    /* usleep() is only defined for values < 1000000, so use nanosleep()
+     * which has no such restriction
+     */
+    struct timespec ts = { .tv_sec  =  ms / 1000,
+			   .tv_nsec = (ms % 1000) * 1000000L };
+    nanosleep(&ts, NULL);
 #if defined(BITTERS_WITH_THREADS)
     pthread_sigmask(SIG_SETMASK, &oldmask, NULL);
 #else

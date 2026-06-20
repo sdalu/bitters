@@ -59,17 +59,22 @@ typedef struct bitters_i2c_cfg {
  *       be or-ed with it.
  */
 typedef uint16_t bitters_i2c_addr_t;
-#define BITTERS_I2C_ADDR_8	0x0000	/**< I2C  8-bit address */
-#define BITTERS_I2C_ADDR_10	0x1000  /**< I2C 10-bit address */
-#define BITTERS_I2C_ADDR_MSK	0x0fff
+#define BITTERS_I2C_ADDR_8	0x0000	/**< I2C  8-bit address		*/
+#define BITTERS_I2C_ADDR_10	0x1000  /**< I2C 10-bit address flag	*/
+#define BITTERS_I2C_ADDR_MSK	0x0fff	/**< mask isolating the address	*/
 
 
 /**
- * I2C transfert chunk.
+ * I2C transfer chunk.
+ *
+ * Set @c dir to either BITTERS_I2C_TRANSFER_READ or
+ * BITTERS_I2C_TRANSFER_WRITE to select the direction of the transfer.
+ * The @c read / @c write bitfields are an alternate, endian-safe view of
+ * @c dir and are not meant to be set together.
  */
-struct bitters_i2c_transfert {
-    uint8_t *buf;		/**< buffer or NULL 		*/
-    size_t   len;		/**< buffer size		*/
+struct bitters_i2c_transfer {
+    uint8_t *buf;		/**< data buffer (read into or written from) */
+    size_t   len;		/**< buffer size in bytes	*/
     union {
       uint8_t  dir;		/**< direction (read or write)	*/
       struct {
@@ -87,10 +92,17 @@ struct bitters_i2c_transfert {
       };
     };
 };
-#define BITTERS_I2C_TRANSFERT_READ	0x02
-#define BITTERS_I2C_TRANSFERT_WRITE	0x01
+#define BITTERS_I2C_TRANSFER_READ	0x02	/**< read from the device */
+#define BITTERS_I2C_TRANSFER_WRITE	0x01	/**< write to the device	 */
 
 
+/**
+ * Initialize the I2C subsystem.
+ * Normally called automatically by bitters_init(); call it directly only
+ * if you use the I2C API without the rest of the library.
+ *
+ * @return < 0 in case of error (-errno)
+ */
 int bitters_i2c_init(void);
 
 /**
@@ -112,25 +124,28 @@ int bitters_i2c_disable(bitters_i2c_t *i2c);
 
 /**
  * Change speed of I2C bus.
+ * @note Not supported on Linux: the bus speed is a property of the
+ *       hardware platform and must be configured at boot time. This
+ *       function always fails with -ENOSYS.
  *
  * @param i2c		I2C interface
  * @param speed		bus speed in Hz
- * @return < 0 in case of error (-errno)
+ * @return -ENOSYS	always (see note)
  */
 int bitters_i2c_set_speed(bitters_i2c_t *i2c, uint32_t speed);
 
 /**
- * Change speed of I2C bus.
+ * Perform an I2C transfer.
  *
  * @param i2c		I2C interface
- * @param addr		I2C addressed
+ * @param addr		I2C address
  *			(or-ed with BITTERS_I2C_ADDR_10 if necessary)
- * @param xfr		chunk to be transfered
- * @param count		number of transfered chunk
+ * @param xfr		chunks to be transferred
+ * @param count		number of transferred chunks
  * @return < 0 in case of error (-errno)
  */
-int bitters_i2c_transfert(bitters_i2c_t *i2c, bitters_i2c_addr_t addr,
-	const struct bitters_i2c_transfert *xfr, unsigned int count);
+int bitters_i2c_transfer(bitters_i2c_t *i2c, bitters_i2c_addr_t addr,
+	const struct bitters_i2c_transfer *xfr, unsigned int count);
 
 
 /** @} */

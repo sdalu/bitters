@@ -18,6 +18,8 @@
  * @{
  */
 
+#include <stdint.h>
+
 /**
  * Generate a delay of a few microseconds
  * @param us		number of microseconds to wait for
