@@ -129,7 +129,7 @@
  * Extract the file descriptor use for irq processing from the pin
  * @note Undefined behaviour if used with bitters_gpio_irq_callback
  *
- * @param pin 		pin identification
+ * @param _pin 		pin identification
  * @return -1           if pin not enabled for interrupt processing
  * @return		file descriptor
  *
@@ -236,6 +236,8 @@ int bitters_gpio_pin_write(bitters_gpio_pin_t *pin, int value);
  * @param pin 		pin identification
  * @return -EINVAL	if pin was not enabled for interrupt
  * @return < 0 in case of error (-errno)
+ * @return the event id (@c GPIO_V2_LINE_EVENT_RISING_EDGE or
+ *         @c GPIO_V2_LINE_EVENT_FALLING_EDGE) on success
  */
 int bitters_gpio_irq_wait(bitters_gpio_pin_t *pin);
 
@@ -245,7 +247,7 @@ int bitters_gpio_irq_wait(bitters_gpio_pin_t *pin);
  * @note Undefined behaviour if used with bitters_gpio_irq_callback
  *
  * @param pin 		pin identification
- * @param pfd[out]      pointer to a pollfd structure
+ * @param[out] pfd      pointer to a pollfd structure
  * @return -EINVAL	if pin was not enabled for interrupt
  */
 int bitters_gpio_irq_fill_pollfd(bitters_gpio_pin_t *pin, struct pollfd *pfd);

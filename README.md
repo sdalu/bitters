@@ -84,6 +84,11 @@ Enable additional compilation flags to enable assertions and logging.
 | SPI    | `BITTERS_SPI_WITH_ASSERT`  | `BITTERS_SPI_WITH_LOG`  |
 | I2C    | `BITTERS_I2C_WITH_ASSERT`  | `BITTERS_I2C_WITH_LOG`  |
 
+Logging goes to `stderr` by default, and assertions use the standard
+`assert()`. Both can be redirected by defining the `BITTERS_LOG(fmt, ...)`
+and `BITTERS_ASSERT(expr)` macros (on the compiler command line, or before
+including `bitters.h`).
+
 
 ### Suppress Warnings
 
@@ -107,6 +112,20 @@ If you need to manipulate device-tree, you can read about it:
 https://michael.franzl.name/blog/posts/2016-11-10-setting-i2c-speed-raspberry-pi
 
 
+Library
+-------
+`bitters_init()` initializes the whole library (all the subsystems below).
+If you only use one subsystem, you can instead call its dedicated init
+function (`bitters_gpio_init()`, `bitters_spi_init()`, `bitters_i2c_init()`).
+
+### API Functions
+
+| **Function**                | **Description**                                          |
+|-----------------------------|----------------------------------------------------------|
+| `bitters_init()`            | Initialize the library (all subsystems)                  |
+| `bitters_reduced_latency()` | Reduce IO latency (raise scheduling priority, lock pages in memory) |
+
+
 GPIO
 ----
 On Linux, the gpio pull strength is considered to be part of the hardware
@@ -123,14 +142,15 @@ It needs to be configured at boot time, using either
 
 ### API Functions
 
-| **Function**                  | **Description**                                       |
-|-------------------------------|-------------------------------------------------------|
-| `bitters_gpio_pin_enable()`   | Enable and configure pin                              |
-| `bitters_gpio_pin_disable()`  | Disable pin                                           |
-| `bitters_gpio_pin_read()`     | Read pin value                                        |
-| `bitters_gpio_pin_write()`    | Write pin value                                       |
-| `bitters_gpio_irq_wait()`     | Busy wait on interrupt                                |
-| `bitters_gpio_irq_callback()` | Register interrupt callback (requires thread support) |
+| **Function**                       | **Description**                                       |
+|------------------------------------|-------------------------------------------------------|
+| `bitters_gpio_pin_enable()`        | Enable and configure pin                              |
+| `bitters_gpio_pin_disable()`       | Disable pin                                           |
+| `bitters_gpio_pin_read()`          | Read pin value                                        |
+| `bitters_gpio_pin_write()`         | Write pin value                                       |
+| `bitters_gpio_irq_wait()`          | Blocking wait for interrupt                           |
+| `bitters_gpio_irq_fill_pollfd()`   | Fill a `pollfd` structure for use with `poll`/`ppoll` |
+| `bitters_gpio_irq_callback()`      | Register interrupt callback (requires thread support) |
 
 
 
@@ -174,6 +194,21 @@ parameter to the kernel. On a Raspberry Pi, this is done in `/boot/cmdline.txt`
 | `bitters_spi_set_speed()`    | Set bus speed              |
 | `bitters_spi_set_wordsize()` | Set word size              |
 | `bitters_spi_transfer()`     | Perform SPI transfer       |
+
+
+Delay
+-----
+Delay helpers sleep with all signals masked, so the delay is not cut short
+by signal delivery. If your application uses threads, compile with
+`-DBITTERS_WITH_THREADS` so that only the calling thread's signal mask is
+affected.
+
+### API Functions
+
+| **Function**           | **Description**                    |
+|------------------------|------------------------------------|
+| `bitters_delay_usec()` | Delay for a number of microseconds |
+| `bitters_delay_msec()` | Delay for a number of milliseconds |
 
 
 Getting started
@@ -252,7 +287,8 @@ int main() {
 
 You could also find it easier (and it won't require thread support) to
 process interrupt using the unix `poll`/`ppoll` to wait on multiple
-events:
+events. The `pollfd` entry can be filled manually as below, or with the
+`bitters_gpio_irq_fill_pollfd()` helper:
 
 ~~~c
 // Fill the pollfd structure with all the file descriptor
