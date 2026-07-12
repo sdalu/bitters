@@ -67,7 +67,8 @@ _bitters_i2c_warn_about_hardware_config(void) {
 	"\n");
 }
 
-#ifndef BITTERS_SILENCE_RPI_WARNING
+#if !defined(BITTERS_SILENCE_WARNING    ) &&				\
+    !defined(BITTERS_SILENCE_RPI_WARNING)
 #  define BITTERS_I2C_WARN_ABOUT_HARDWARE_CONFIG()			\
     _bitters_i2c_warn_about_hardware_config()
 #else
@@ -205,6 +206,12 @@ bitters_i2c_transfer(bitters_i2c_t *i2c, bitters_i2c_addr_t addr,
 	i2c_flags |= I2C_M_TEN;
 
     for (unsigned int i = 0 ; i < count ; i++) {
+	/* Kernel i2c_msg.len is a 16-bit field */
+	if (xfr[i].len > UINT16_MAX) {
+	    BITTERS_I2C_LOG("chunk %u too large (%zu > %u)",
+			    i, xfr[i].len, UINT16_MAX);
+	    return -EINVAL;
+	}
 	memset(&msg[i], 0, sizeof(struct i2c_msg));
 	msg[i].addr  = i2c_addr;
 	msg[i].flags = i2c_flags;

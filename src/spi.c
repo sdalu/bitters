@@ -216,6 +216,16 @@ int
 bitters_spi_transfer(bitters_spi_t *spi,
 	const struct bitters_spi_transfer *xfr, unsigned int count)
 {
+    /* Nothing to transfer (also avoids a zero-length VLA below) */
+    if (count == 0)
+	return 0;
+
+    /* SPI_IOC_MESSAGE(count) encodes the size in 14 bits; beyond that
+     * SPI_MSGSIZE collapses to 0 and the kernel would treat the request
+     * as an empty message set (silent no-op). */
+    if (SPI_MSGSIZE(count) == 0)
+	return -EINVAL;
+
     struct spi_ioc_transfer tr[count];
     for (unsigned int i = 0 ; i < count ; i++) {
 	memset(&tr[i], 0, sizeof(struct spi_ioc_transfer));

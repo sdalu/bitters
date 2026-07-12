@@ -170,12 +170,18 @@ bitters_gpio_irq_processing(void *args) {
 	for (int i = 0 ; i < ctrl->lines ; i++) {
 	    if (ctrl->fds[i].revents) {
 		bitters_gpio_pin_t *pin = ctrl->pins[i];
+		/* Pin may have been unregistered while an event
+		 * was pending */
+		if (pin == NULL)
+		    continue;
+		bitters_gpio_irq_cb_t cb = pin->irq_cb;
 		// Consume event
 		BITTERS_GPIO_LOG("got interrupt on pin %d", pin->id);
-		bitters_gpio_irq_wait(pin);
-		// Perform callback
-		BITTERS_GPIO_ASSERT(pin->irq_cb != NULL);
-		pin->irq_cb(pin, pin->irq_cb_args);
+		if (bitters_gpio_irq_wait(pin) < 0)
+		    continue;
+		// Perform callback (unless unregistered meanwhile)
+		if (cb != NULL)
+		    cb(pin, pin->irq_cb_args);
 	    }
 	}
     };
@@ -270,6 +276,8 @@ _bitters_gpio_ctrl_create(const char *devname)
 
     // Deal with failures
  failed:
+    if (fd >= 0)
+	close(fd);
     free(devpath);
     free(name);
 #if defined(BITTERS_WITH_GPIO_IRQ) && defined(BITTERS_WITH_THREADS)
@@ -379,6 +387,8 @@ bitters_gpio_init(void)
 		    strsignal(BITTERS_SIGIRQ));
 	return -errno;
     }
+    /* Assert to fail hard in debug builds; NDEBUG builds fall through
+     * to the graceful recovery below */
     BITTERS_ASSERT((oldsigact.sa_handler   == NULL) &&
 		   (oldsigact.sa_sigaction == NULL));
     if ((oldsigact.sa_handler   != NULL) ||
@@ -502,7 +512,10 @@ bitters_gpio_pin_enable(bitters_gpio_pin_t *pin, bitters_gpio_cfg_t *cfg)
 	      .attr.debounce_period_us= cfg->debounce              }
 	}
     };
-    strncpy(req.consumer, cfg->label, sizeof(req.consumer));
+    /* Label is optional; req is zero-initialized, so copying at most
+     * sizeof-1 bytes keeps the consumer string NUL-terminated */
+    if (cfg->label != NULL)
+	strncpy(req.consumer, cfg->label, sizeof(req.consumer) - 1);
 
     // Call ioctl
     int rc = ioctl(pin->ctrl->fd, GPIO_V2_GET_LINE_IOCTL, &req);
@@ -537,6 +550,20 @@ bitters_gpio_pin_disable(bitters_gpio_pin_t *pin)
     // Already disabled (or never enabled) ?
     if (pin->fd < 0)
 	return 0;
+
+#if defined(BITTERS_WITH_GPIO_IRQ) && defined(BITTERS_WITH_THREADS)
+    /* Remove pin from irq callback processing before closing its
+     * descriptor, otherwise the processing thread would keep polling
+     * a stale descriptor (POLLNVAL) and spin invoking the callback */
+    if ((pin->ctrl != NULL) && (pin->irq_cb != NULL)) {
+	pin->irq_cb      = NULL;
+	pin->irq_cb_args = NULL;
+	pin->ctrl->fds[pin->id].fd = -1;
+	pin->ctrl->pins[pin->id]   = NULL;
+	/* Notify irq processing thread of changes */
+	pthread_kill(pin->ctrl->irq_thread, BITTERS_SIGIRQ);
+    }
+#endif
 
     // Disable pin, by closing file descriptor
     int rc = close(pin->fd);
