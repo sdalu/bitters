@@ -113,6 +113,8 @@ struct bitters_gpio_ctrl {
 #if defined(BITTERS_WITH_GPIO_IRQ) && defined(BITTERS_WITH_THREADS)
     pthread_t irq_thread;		// thread for "irq" processing
     pthread_mutex_t irq_lock;		// protects fds/pins/irq_cb*
+    int   shutdown;			// irq thread shutdown request
+					//  (1: join, 2: self-release)
     int   lines;			// controller pin count
     struct pollfd *fds;
     bitters_gpio_pin_t **pins;
@@ -138,6 +140,49 @@ _bitters_gpio_sigirq(int a) {
 }
 
 
+static void
+_bitters_gpio_ctrl_free(struct bitters_gpio_ctrl *ctrl)
+{
+#if defined(BITTERS_WITH_GPIO_IRQ) && defined(BITTERS_WITH_THREADS)
+    pthread_mutex_destroy(&ctrl->irq_lock);
+    free(ctrl->fds);
+    free(ctrl->pins);
+#endif
+    close(ctrl->fd);
+    free(ctrl->name);
+    free(ctrl);
+}
+
+
+static void
+_bitters_gpio_ctrl_destroy(struct bitters_gpio_ctrl *ctrl)
+{
+    /* Remove from controller list */
+    LIST_REMOVE(ctrl, entries);
+
+#if defined(BITTERS_WITH_GPIO_IRQ) && defined(BITTERS_WITH_THREADS)
+    /* Request irq processing thread shutdown */
+    int self = pthread_equal(pthread_self(), ctrl->irq_thread);
+    pthread_mutex_lock(&ctrl->irq_lock);
+    ctrl->shutdown = self ? 2 : 1;
+    pthread_mutex_unlock(&ctrl->irq_lock);
+
+    if (self) {
+	/* Destroying from within an irq callback: the thread can't
+	 * join itself, it will notice the request on its way out
+	 * and release the controller */
+	pthread_detach(ctrl->irq_thread);
+	return;
+    }
+
+    pthread_kill(ctrl->irq_thread, BITTERS_SIGIRQ);
+    pthread_join(ctrl->irq_thread, NULL);
+#endif
+
+    _bitters_gpio_ctrl_free(ctrl);
+}
+
+
 static int
 _bitters_gpio_pin_disassociate_ctrl(bitters_gpio_pin_t *pin)
 {
@@ -146,6 +191,13 @@ _bitters_gpio_pin_disassociate_ctrl(bitters_gpio_pin_t *pin)
     BITTERS_GPIO_ASSERT(ctrl->refcount > 0);
     ctrl->refcount--;
     pin->ctrl = NULL;
+
+    /* Last pin released: destroy the controller */
+    if (ctrl->refcount == 0) {
+	BITTERS_GPIO_LOG("releasing controller %s", ctrl->name);
+	_bitters_gpio_ctrl_destroy(ctrl);
+    }
+
     return 0;
 }
 
@@ -164,7 +216,15 @@ bitters_gpio_irq_processing(void *args) {
     sigaddset(&blocked, BITTERS_SIGIRQ);
     pthread_sigmask(SIG_BLOCK, &blocked, NULL);
 
+    int shutdown = 0;
     while (1) {
+	/* Check for shutdown request (controller release) */
+	pthread_mutex_lock(&ctrl->irq_lock);
+	shutdown = ctrl->shutdown;
+	pthread_mutex_unlock(&ctrl->irq_lock);
+	if (shutdown)
+	    break;
+
 	int rc = ppoll(ctrl->fds, ctrl->lines, NULL, &mask);
 	/* Check if we got interrupted to perform a reload of the
 	 * file descriptors table
@@ -202,7 +262,12 @@ bitters_gpio_irq_processing(void *args) {
 	pthread_mutex_unlock(&ctrl->irq_lock);
     };
 
-    __builtin_unreachable();
+    /* Shutdown was requested from one of our own callbacks: the
+     * thread is detached and must release the controller itself */
+    if (shutdown == 2)
+	_bitters_gpio_ctrl_free(ctrl);
+
+    return NULL;
 }
 #endif
 
@@ -287,6 +352,7 @@ _bitters_gpio_ctrl_create(const char *devname)
 	/* pthread_* return a positive error number, and don't set errno */
 	errno = rc;
 	BITTERS_GPIO_LOG("failed to create irq processing thread");
+	pthread_mutex_destroy(&ctrl->irq_lock);
 	goto failed;
     }
 #endif
@@ -604,6 +670,11 @@ bitters_gpio_pin_disable(bitters_gpio_pin_t *pin)
     // Mark as disabled
     pin->flags = 0;
     pin->fd    = -1;
+
+    // Release the controller reference (the controller itself is
+    // destroyed when its last pin is released)
+    if (pin->ctrl != NULL)
+	_bitters_gpio_pin_disassociate_ctrl(pin);
 
     // Job's done
     return 0;
