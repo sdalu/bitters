@@ -112,6 +112,7 @@ struct bitters_gpio_ctrl {
     int   refcount;			/* number of pin associated	*/
 #if defined(BITTERS_WITH_GPIO_IRQ) && defined(BITTERS_WITH_THREADS)
     pthread_t irq_thread;		// thread for "irq" processing
+    pthread_mutex_t irq_lock;		// protects fds/pins/irq_cb*
     int   lines;			// controller pin count
     struct pollfd *fds;
     bitters_gpio_pin_t **pins;
@@ -156,6 +157,13 @@ bitters_gpio_irq_processing(void *args) {
     sigfillset(&mask);
     sigdelset(&mask, BITTERS_SIGIRQ);
 
+    /* Deliver BITTERS_SIGIRQ only inside ppoll(), so a registration
+     * change always interrupts the poll or is seen at its next entry */
+    sigset_t blocked;
+    sigemptyset(&blocked);
+    sigaddset(&blocked, BITTERS_SIGIRQ);
+    pthread_sigmask(SIG_BLOCK, &blocked, NULL);
+
     while (1) {
 	int rc = ppoll(ctrl->fds, ctrl->lines, NULL, &mask);
 	/* Check if we got interrupted to perform a reload of the
@@ -167,6 +175,7 @@ bitters_gpio_irq_processing(void *args) {
 	}
 	/* Find and process pin irq
 	 */
+	pthread_mutex_lock(&ctrl->irq_lock);
 	for (int i = 0 ; i < ctrl->lines ; i++) {
 	    if (ctrl->fds[i].revents) {
 		bitters_gpio_pin_t *pin = ctrl->pins[i];
@@ -174,16 +183,23 @@ bitters_gpio_irq_processing(void *args) {
 		 * was pending */
 		if (pin == NULL)
 		    continue;
-		bitters_gpio_irq_cb_t cb = pin->irq_cb;
+		bitters_gpio_irq_cb_t cb      = pin->irq_cb;
+		void                 *cb_args = pin->irq_cb_args;
 		// Consume event
 		BITTERS_GPIO_LOG("got interrupt on pin %d", pin->id);
 		if (bitters_gpio_irq_wait(pin) < 0)
 		    continue;
 		// Perform callback (unless unregistered meanwhile)
-		if (cb != NULL)
-		    cb(pin, pin->irq_cb_args);
+		if (cb != NULL) {
+		    /* Don't hold the lock during the callback: it may
+		     * legitimately re-register or disable the pin */
+		    pthread_mutex_unlock(&ctrl->irq_lock);
+		    cb(pin, cb_args);
+		    pthread_mutex_lock(&ctrl->irq_lock);
+		}
 	    }
 	}
+	pthread_mutex_unlock(&ctrl->irq_lock);
     };
 
     __builtin_unreachable();
@@ -254,6 +270,15 @@ _bitters_gpio_ctrl_create(const char *devname)
     }
     BITTERS_GPIO_LOG("found %u lines for %s (%s)",
 		     cinfo.lines, cinfo.name, cinfo.label);
+
+    // Initialize lock protecting the irq processing tables
+    rc = pthread_mutex_init(&ctrl->irq_lock, NULL);
+    if (rc != 0) {
+	/* pthread_* return a positive error number, and don't set errno */
+	errno = rc;
+	BITTERS_GPIO_LOG("failed to create irq table lock");
+	goto failed;
+    }
 
     // Create IRQ processing thread
     rc = pthread_create(&ctrl->irq_thread, NULL,
@@ -556,10 +581,12 @@ bitters_gpio_pin_disable(bitters_gpio_pin_t *pin)
      * descriptor, otherwise the processing thread would keep polling
      * a stale descriptor (POLLNVAL) and spin invoking the callback */
     if ((pin->ctrl != NULL) && (pin->irq_cb != NULL)) {
+	pthread_mutex_lock(&pin->ctrl->irq_lock);
 	pin->irq_cb      = NULL;
 	pin->irq_cb_args = NULL;
 	pin->ctrl->fds[pin->id].fd = -1;
 	pin->ctrl->pins[pin->id]   = NULL;
+	pthread_mutex_unlock(&pin->ctrl->irq_lock);
 	/* Notify irq processing thread of changes */
 	pthread_kill(pin->ctrl->irq_thread, BITTERS_SIGIRQ);
     }
@@ -675,6 +702,8 @@ bitters_gpio_irq_callback(bitters_gpio_pin_t *pin,
     BITTERS_GPIO_ENSURE_INTERRUPT_PIN(pin);
 
 #if defined(BITTERS_WITH_GPIO_IRQ) && defined(BITTERS_WITH_THREADS)
+    pthread_mutex_lock(&pin->ctrl->irq_lock);
+
     /* Save callback information */
     pin->irq_cb      = cb;
     pin->irq_cb_args = args;
@@ -686,6 +715,8 @@ bitters_gpio_irq_callback(bitters_gpio_pin_t *pin,
 
     /* Save pin in controller table */
     pin->ctrl->pins[pin->id] = pin;
+
+    pthread_mutex_unlock(&pin->ctrl->irq_lock);
 
     /* Notify irq processing thread of changes */
     int rc = pthread_kill(pin->ctrl->irq_thread, BITTERS_SIGIRQ);
