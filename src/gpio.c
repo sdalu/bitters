@@ -588,21 +588,28 @@ bitters_gpio_pin_enable(bitters_gpio_pin_t *pin, bitters_gpio_cfg_t *cfg)
     }
 
     // Create gpio line request
+    //  (unused config.attrs slots must stay zeroed:
+    //   recent kernels reject requests with data beyond num_attrs)
     struct gpio_v2_line_request req = {
 	.num_lines        = 1,
 	.offsets          = { [0] = pin->id },
 	.config.flags     = flags,
-	.config.num_attrs = ((cfg->dir     == BITTERS_GPIO_DIR_INPUT) &&
-			     (cfg->debounce > 0)) ? 2 : 1,
-	.config.attrs     = {
-	    { .mask                   = 1 << 0,
-	      .attr.id                = GPIO_V2_LINE_ATTR_ID_OUTPUT_VALUES,
-	      .attr.values            = (cfg->defval ? 1 : 0) << 0 },
-	    { .mask                   = 1 << 0,
-	      .attr.id                = GPIO_V2_LINE_ATTR_ID_DEBOUNCE,
-	      .attr.debounce_period_us= cfg->debounce              }
-	}
     };
+    unsigned int n = 0;
+    if (cfg->dir == BITTERS_GPIO_DIR_OUTPUT) {
+	req.config.attrs[n].mask        = 1 << 0;
+	req.config.attrs[n].attr.id     = GPIO_V2_LINE_ATTR_ID_OUTPUT_VALUES;
+	req.config.attrs[n].attr.values = (cfg->defval ? 1 : 0) << 0;
+	n++;
+    }
+    if ((cfg->dir == BITTERS_GPIO_DIR_INPUT) && (cfg->debounce > 0)) {
+	req.config.attrs[n].mask                    = 1 << 0;
+	req.config.attrs[n].attr.id                 = GPIO_V2_LINE_ATTR_ID_DEBOUNCE;
+	req.config.attrs[n].attr.debounce_period_us = cfg->debounce;
+	n++;
+    }
+    req.config.num_attrs = n;
+
     /* Label is optional; req is zero-initialized, so copying at most
      * sizeof-1 bytes keeps the consumer string NUL-terminated */
     if (cfg->label != NULL)
