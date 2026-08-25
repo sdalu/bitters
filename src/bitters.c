@@ -9,6 +9,9 @@
 #include <sys/mman.h>
 #include <errno.h>
 #include <string.h>
+#if defined(BITTERS_WITH_THREADS)
+#include <pthread.h>
+#endif
 
 #include "bitters.h"
 #include "bitters/gpio.h"
@@ -18,29 +21,40 @@
 int
 bitters_init(void)
 {
-    // Allows calling init multiple times
-    static unsigned int initialized = 0;
-    if (initialized) { return 0; }
-
     int rc = 0;
+
+    /* Allows calling init multiple times, also concurrently: without
+     * the lock, two first-time callers would both run the subsystem
+     * inits, and the gpio signal-handler setup would mistake its own
+     * sibling for a conflicting third-party handler */
+    static unsigned int initialized = 0;
+#if defined(BITTERS_WITH_THREADS)
+    static pthread_mutex_t initialized_lock = PTHREAD_MUTEX_INITIALIZER;
+    pthread_mutex_lock(&initialized_lock);
+#endif
+    if (initialized) { goto done; }
 
     /* Initialize GPIO */
     if ((rc = bitters_gpio_init()) < 0)
-	return rc;
+	goto done;
 
     /* Initialize SPI */
     if ((rc = bitters_spi_init()) < 0)
-	return rc;
+	goto done;
 
     /* Initialize I2C */
     if ((rc = bitters_i2c_init()) < 0)
-	return rc;
+	goto done;
 
     /* Mark as initialized, only on success, so that a failed
      * initialization can be retried */
     initialized = 1;
 
     /* Job's done */
+ done:
+#if defined(BITTERS_WITH_THREADS)
+    pthread_mutex_unlock(&initialized_lock);
+#endif
     return rc;
 }
 
