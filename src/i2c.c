@@ -194,6 +194,16 @@ int
 bitters_i2c_transfer(bitters_i2c_t *i2c, bitters_i2c_addr_t addr,
 	const struct bitters_i2c_transfer *xfr, unsigned int count)
 {
+    /* Nothing to transfer (also avoids a zero-length VLA below) */
+    if (count == 0)
+	return 0;
+
+    /* The kernel rejects message sets above I2C_RDWR_IOCTL_MAX_MSGS,
+     * but only after the VLA below has been allocated: bound it here
+     * so a huge count cannot blow the stack first */
+    if (count > I2C_RDWR_IOCTL_MAX_MSGS)
+	return -EINVAL;
+
     struct i2c_msg msg[count];
     struct i2c_rdwr_ioctl_data msgset = {
        .msgs  = msg,
