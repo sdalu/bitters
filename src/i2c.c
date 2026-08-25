@@ -165,16 +165,19 @@ bitters_i2c_disable(bitters_i2c_t *i2c)
 	return 0;
 
     /* Disable
-     */
+     * On Linux the descriptor is released even when close() fails
+     * (e.g. EINTR), so the device is marked disabled regardless:
+     * keeping the stale fd would make a later enable() no-op on a
+     * dead descriptor, and a retried disable() a double close */
+    int rc = 0;
     if (close(i2c->fd) < 0) {
-	int rc = -errno;
+	rc = -errno;
 	BITTERS_I2C_LOG("failed to close i2c-%d device (%s)",
 			i2c->id, strerror(errno));
-	return rc;
     }
 
     i2c->fd = -1;
-    return 0;
+    return rc;
 }
 
 

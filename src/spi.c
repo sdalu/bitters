@@ -173,16 +173,19 @@ bitters_spi_disable(bitters_spi_t *spi)
 	return 0;
 
     /* Disable
-     */
+     * On Linux the descriptor is released even when close() fails
+     * (e.g. EINTR), so the device is marked disabled regardless:
+     * keeping the stale fd would make a later enable() no-op on a
+     * dead descriptor, and a retried disable() a double close */
+    int rc = 0;
     if (close(spi->fd) < 0) {
-	int rc = -errno;
+	rc = -errno;
 	BITTERS_SPI_LOG("failed to close spi-%d device (%s)",
 			spi->id, strerror(errno));
-	return rc;
     }
 
     spi->fd = -1;
-    return 0;
+    return rc;
 }
 
 

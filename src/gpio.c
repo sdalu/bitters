@@ -683,12 +683,15 @@ bitters_gpio_pin_disable(bitters_gpio_pin_t *pin)
 #endif
 
     // Disable pin, by closing file descriptor
+    /* On Linux the descriptor is released even when close() fails
+     * (e.g. EINTR), so the pin is marked disabled and the controller
+     * released regardless: keeping the stale fd would turn a retry
+     * into a double close of a possibly reused descriptor */
     int rc = close(pin->fd);
     if (rc < 0) {
 	rc = -errno;
 	BITTERS_GPIO_LOG("failed to disable pin %s[%d] (%s)",
 		 pin->ctrl_devname, pin->id, strerror(errno));
-	return rc;
     }
 
     // Mark as disabled
@@ -700,8 +703,8 @@ bitters_gpio_pin_disable(bitters_gpio_pin_t *pin)
     if (pin->ctrl != NULL)
 	_bitters_gpio_pin_disassociate_ctrl(pin);
 
-    // Job's done
-    return 0;
+    // Job's done (rc reports a close() failure, the pin is disabled)
+    return rc;
 }
 
 
