@@ -223,14 +223,20 @@ bitters_spi_transfer(bitters_spi_t *spi,
     if (count == 0)
 	return 0;
 
-    /* SPI_IOC_MESSAGE(count) encodes the size in 14 bits; beyond that
-     * SPI_MSGSIZE collapses to 0 and the kernel would treat the request
-     * as an empty message set (silent no-op). */
-    if (SPI_MSGSIZE(count) == 0)
+    /* SPI_IOC_MESSAGE(count) encodes the size in 14 bits. The bound is
+     * checked by division (not through SPI_MSGSIZE, whose count *
+     * sizeof multiplication can wrap on 32-bit size_t and slip a huge
+     * count past the check into the VLA below). */
+    if (count >= (1 << 14) / sizeof(struct spi_ioc_transfer))
 	return -EINVAL;
 
     struct spi_ioc_transfer tr[count];
     for (unsigned int i = 0 ; i < count ; i++) {
+	/* Kernel spi_ioc_transfer.len is a 32-bit field */
+	if (xfr[i].len > (uint64_t)UINT32_MAX) {
+	    BITTERS_SPI_LOG("chunk %u too large (%zu)", i, xfr[i].len);
+	    return -EINVAL;
+	}
 	memset(&tr[i], 0, sizeof(struct spi_ioc_transfer));
 	tr[i].tx_buf        = (unsigned long) xfr[i].tx;
 	tr[i].rx_buf        = (unsigned long) xfr[i].rx;
