@@ -41,8 +41,10 @@
 #include "bitters/gpio.h"
 #include "queue.h"
 
-#if defined(BITTERS_WITH_GPIO_IRQ) && defined(BITTERS_WITH_THREADS)
+#if defined(BITTERS_WITH_THREADS)
 #include <pthread.h>
+#endif
+#if defined(BITTERS_WITH_GPIO_IRQ) && defined(BITTERS_WITH_THREADS)
 #include <signal.h>
 #endif
 
@@ -129,6 +131,19 @@ struct bitters_gpio_ctrl {
 static LIST_HEAD(, bitters_gpio_ctrl) bitters_gpio_ctrls =
     LIST_HEAD_INITIALIZER(bitters_gpio_ctrls);
 
+#if defined(BITTERS_WITH_THREADS)
+/* Protects the controller list and the per-controller refcount
+ * (irq_lock only covers the irq processing tables) */
+static pthread_mutex_t bitters_gpio_ctrls_lock = PTHREAD_MUTEX_INITIALIZER;
+#define BITTERS_GPIO_CTRLS_LOCK()				\
+    pthread_mutex_lock(&bitters_gpio_ctrls_lock)
+#define BITTERS_GPIO_CTRLS_UNLOCK()				\
+    pthread_mutex_unlock(&bitters_gpio_ctrls_lock)
+#else
+#define BITTERS_GPIO_CTRLS_LOCK()
+#define BITTERS_GPIO_CTRLS_UNLOCK()
+#endif
+
 
 
 
@@ -157,8 +172,8 @@ _bitters_gpio_ctrl_free(struct bitters_gpio_ctrl *ctrl)
 static void
 _bitters_gpio_ctrl_destroy(struct bitters_gpio_ctrl *ctrl)
 {
-    /* Remove from controller list */
-    LIST_REMOVE(ctrl, entries);
+    /* The controller has already been unlinked from the list by the
+     * caller (under the list lock), so no other thread can reach it */
 
 #if defined(BITTERS_WITH_GPIO_IRQ) && defined(BITTERS_WITH_THREADS)
     /* Request irq processing thread shutdown */
@@ -187,13 +202,24 @@ static int
 _bitters_gpio_pin_disassociate_ctrl(bitters_gpio_pin_t *pin)
 {
     struct bitters_gpio_ctrl *ctrl = pin->ctrl;
+    int last;
 
+    BITTERS_GPIO_CTRLS_LOCK();
     BITTERS_GPIO_ASSERT(ctrl->refcount > 0);
     ctrl->refcount--;
     pin->ctrl = NULL;
+    last = (ctrl->refcount == 0);
+    if (last) {
+	/* Unlink while holding the lock, so no other thread can find
+	 * and re-reference the controller; the teardown itself happens
+	 * unlocked, as it may join the irq thread (which could be busy
+	 * in a callback that takes this very lock) */
+	LIST_REMOVE(ctrl, entries);
+    }
+    BITTERS_GPIO_CTRLS_UNLOCK();
 
     /* Last pin released: destroy the controller */
-    if (ctrl->refcount == 0) {
+    if (last) {
 	BITTERS_GPIO_LOG("releasing controller %s", ctrl->name);
 	_bitters_gpio_ctrl_destroy(ctrl);
     }
@@ -388,6 +414,8 @@ _bitters_gpio_pin_associate_ctrl(bitters_gpio_pin_t *pin)
     int                       rc      = -EINVAL;
     struct bitters_gpio_ctrl *ctrl    = NULL;
 
+    BITTERS_GPIO_CTRLS_LOCK();
+
     /* Lookup for existing controller
      */
     for (ctrl =  LIST_FIRST(&bitters_gpio_ctrls) ; ctrl ; ctrl = LIST_NEXT(ctrl, entries)) {
@@ -417,10 +445,12 @@ _bitters_gpio_pin_associate_ctrl(bitters_gpio_pin_t *pin)
     ctrl->refcount++;
     pin->ctrl = ctrl;
     BITTERS_GPIO_LOG("controller %s associated to pin %d", ctrl->name, pin->id);
+    BITTERS_GPIO_CTRLS_UNLOCK();
     return 0;
 
     // Deal with failures
  failed:
+    BITTERS_GPIO_CTRLS_UNLOCK();
     return rc;
 }
 
