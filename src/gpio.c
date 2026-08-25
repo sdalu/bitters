@@ -510,6 +510,8 @@ bitters_gpio_init(void)
 int
 bitters_gpio_pin_enable(bitters_gpio_pin_t *pin, bitters_gpio_cfg_t *cfg)
 {
+    int rc;
+
     BITTERS_GPIO_ASSERT_PIN(pin);
     BITTERS_GPIO_ENSURE_ASSOCIATED_PIN(pin);
 
@@ -537,7 +539,8 @@ bitters_gpio_pin_enable(bitters_gpio_pin_t *pin, bitters_gpio_cfg_t *cfg)
 	    break;
 	default:
 	    BITTERS_GPIO_LOG("unexepected interrupt value");
-	    return -EINVAL;
+	    rc = -EINVAL;
+	    goto failed;
 	}
 	switch(cfg->bias) {
 	case BITTERS_GPIO_BIAS_DISABLED:
@@ -554,7 +557,8 @@ bitters_gpio_pin_enable(bitters_gpio_pin_t *pin, bitters_gpio_cfg_t *cfg)
 	    break;
 	default:
 	    BITTERS_GPIO_LOG("unexepected bias value");
-	    return -EINVAL;
+	    rc = -EINVAL;
+	    goto failed;
 	}
 	break;
 
@@ -572,19 +576,22 @@ bitters_gpio_pin_enable(bitters_gpio_pin_t *pin, bitters_gpio_cfg_t *cfg)
 	    break;
 	default:
 	    BITTERS_GPIO_LOG("unexepected mode value");
-	    return -EINVAL;
+	    rc = -EINVAL;
+	    goto failed;
 	}
 	break;
 
     default:
 	BITTERS_GPIO_LOG("unexepected direction value");
-	return -EINVAL;
+	rc = -EINVAL;
+	goto failed;
     }
 
     if ((cfg->interrupt != BITTERS_GPIO_INTERRUPT_DISABLED) &&
 	(cfg->dir       != BITTERS_GPIO_DIR_INPUT         )) {
 	BITTERS_GPIO_LOG("when using interrupt direction must be input");
-	return -EINVAL;
+	rc = -EINVAL;
+	goto failed;
     }
 
     // Create gpio line request
@@ -616,11 +623,12 @@ bitters_gpio_pin_enable(bitters_gpio_pin_t *pin, bitters_gpio_cfg_t *cfg)
 	strncpy(req.consumer, cfg->label, sizeof(req.consumer) - 1);
 
     // Call ioctl
-    int rc = ioctl(pin->ctrl->fd, GPIO_V2_GET_LINE_IOCTL, &req);
+    rc = ioctl(pin->ctrl->fd, GPIO_V2_GET_LINE_IOCTL, &req);
     if (rc < 0) {
 	BITTERS_GPIO_LOG("failed to issue GPIO_V2_GET_LINE IOCTL"
 			 " for pin %d (%s)", pin->id, strerror(errno));
-	return -errno;
+	rc = -errno;
+	goto failed;
     }
 
     // Store file descriptor
@@ -636,6 +644,15 @@ bitters_gpio_pin_enable(bitters_gpio_pin_t *pin, bitters_gpio_cfg_t *cfg)
     BITTERS_GPIO_LOG("pin %d (%s) enabled (fd=%d)",
 		     pin->id, cfg->label, pin->fd);
     return 0;
+
+    // Deal with failures
+    //   Withdraw the controller association acquired at entry: with
+    //   pin->fd left at -1, disable() would return early and the
+    //   controller reference (device fd, irq thread) could otherwise
+    //   never be released
+ failed:
+    _bitters_gpio_pin_disassociate_ctrl(pin);
+    return rc;
 }
 
 
