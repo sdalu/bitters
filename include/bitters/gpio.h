@@ -126,6 +126,20 @@
 
 
 /**
+ * Initialize an already declared GPIO pin at runtime
+ * (delegates to BITTERS_GPIO_PIN_INITIALIZER, so every other field
+ *  -- flags, irq callback, ... -- is zeroed as well)
+ * Ex: bitters_gpio_pin_t rst;
+ *     BITTERS_GPIO_PIN_INIT(&rst, dev, pin);
+ */
+#define BITTERS_GPIO_PIN_INIT(_p, _dev, _pin)				\
+    do {								\
+	*(_p) = (bitters_gpio_pin_t)					\
+	    BITTERS_GPIO_PIN_INITIALIZER(_dev, _pin);			\
+    } while(0)
+
+
+/**
  * Extract the file descriptor use for irq processing from the pin
  * @note Undefined behaviour if used with bitters_gpio_irq_callback
  *
