@@ -32,6 +32,7 @@
 #include <sys/ioctl.h>
 #include <fcntl.h>
 #include <poll.h>
+#include <time.h>
 
 #include <string.h>
 #include <errno.h>
@@ -256,7 +257,16 @@ bitters_gpio_irq_processing(void *args) {
 	 * file descriptors table
 	 */
 	if (rc < 0) {
-	    BITTERS_GPIO_ASSERT(errno == EINTR);
+	    if (errno == EINTR)
+		continue;
+	    /* Any other failure (EBADF after a line was closed under
+	     * us, ENOMEM, ...) must not end this thread: it is the only
+	     * one delivering interrupts, and the process would be left
+	     * deaf. Log it and pause, so a persistent failure does not
+	     * spin, then retry. */
+	    BITTERS_GPIO_LOG("interrupt poll failed (%s)", strerror(errno));
+	    struct timespec pause = { .tv_sec = 0, .tv_nsec = 100000000 };
+	    nanosleep(&pause, NULL);
 	    continue;
 	}
 	/* Find and process pin irq
