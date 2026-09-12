@@ -8,7 +8,7 @@ worth keeping: the input is known and it demonstrably failed once.
 Running
 -------
 
-    make check                       # no privilege needed
+    make check                       # no privilege needed, touches no bus
     sudo modprobe gpio-mockup gpio_mockup_ranges=-1,8,-1,8
     sudo make check-gpio             # GPIO tests, on a *virtual* chip
     sudo rmmod gpio-mockup
@@ -41,6 +41,9 @@ What each test pins down
 | `t_errno` | `errno` surviving the cleanup in `_bitters_gpio_ctrl_create()` |
 | `t_soak` | descriptor leak and `O_NONBLOCK` restore over 400 enable/disable cycles |
 | `t_allocfail` | allocation-failure paths in controller creation leaking descriptors |
+| `t_pin_rw` | `pin_read()` / `pin_write()`: an input line driven from debugfs and read through the API, an output line written through the API and observed on the chip, including `defval` and a non-1 truth value |
+| `t_spi_args` | SPI argument validation — the `SPI_IOC_MESSAGE` 14-bit count bound (511 passes, 512 does not), the 32-bit `len` field, `set_speed`/`set_wordsize`, and the enable/truncation error paths. Touches no SPI bus |
+| `t_i2c_args` | I2C argument validation — `I2C_RDWR_IOCTL_MAX_MSGS`, the 16-bit `len` field, the direction switch (neither/both rejected), and the enable/truncation error paths. Touches no I2C bus |
 | `t_delay` | a delay being cut short by an ordinary signal, and the signal mask not being restored afterwards |
 | `t_i2c_endian` | the `read`/`write` bitfield view of `dir` matching the transfer constants |
 
@@ -54,6 +57,15 @@ Not covered here
 
 * Big-endian behaviour is checked by inspecting cross-compiled codegen
   (`make endian`), not by running — no big-endian host was available.
+* A real SPI or I2C **data transfer** is never executed: that would mean
+  driving a live bus, which on a development board may have hardware
+  attached. `t_spi_args` and `t_i2c_args` cover every path that returns
+  before the descriptor is used, plus the error paths; the ioctl itself
+  is reached only against a closed descriptor (`-EBADF`), which proves
+  validation passed but not that the transfer works.
+* `bitters_init()` and `bitters_reduced_latency()` are untested; the
+  latter changes scheduling policy and locks memory, so it needs root
+  and affects the machine it runs on.
 * `t_starvation` documents the fairness property but did not reproduce
   starvation on a Pi 4: the dispatch loop drains faster than
   `gpio-mockup` can generate edges. It is a guard, not a reproduction.

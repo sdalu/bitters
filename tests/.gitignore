@@ -10,7 +10,10 @@ t_irq_delivery
 t_irq_wait
 t_irq_sibling_reconfig
 t_lock_stress
+t_pin_rw
 t_pins_dangling
+t_spi_args
+t_i2c_args
 t_race_after
 t_race_enable
 t_soak
