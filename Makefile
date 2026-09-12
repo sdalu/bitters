@@ -27,6 +27,8 @@
 # consumer needs no flag to match the library it links against.
 
 NAME       = bitters
+# Keep in step with the release tag: `make version` prints this, and it
+# is what bitters.pc and the soname carry.
 VERSION    = 1.0.0
 SOMAJOR    = 1
 
@@ -142,6 +144,10 @@ $(NAME).pc: Makefile
 	  'Libs: -L$${libdir} -l$(NAME) $(LIBS)' \
 	  'Cflags: -I$${includedir}' > $@
 
+# Bare, so a script can use it:  v=`make -s version`
+version:					## print the library version
+	@echo '$(VERSION)'
+
 features:					## print the feature selection in force
 	@echo 'THREADS=$(THREADS) GPIO_IRQ=$(GPIO_IRQ) ASSERT=$(ASSERT) LOG=$(LOG)'
 	@echo 'build cppflags : $(FEATURES)'
@@ -234,4 +240,4 @@ help:						## show this help
 	@echo 'The test suite has its own targets; see tests/README.md.'
 
 .PHONY: all static shared featurecheck check check-gpio doc install \
-	uninstall clean distclean features sources help
+	uninstall clean distclean version features sources help
