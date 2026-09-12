@@ -539,6 +539,8 @@ _bitters_gpio_pin_ensure_associated(bitters_gpio_pin_t *pin)
 
 
 
+#if !defined(BITTERS_SILENCE_WARNING    ) &&				\
+    !defined(BITTERS_SILENCE_RPI_WARNING)
 static void
 _bitters_gpio_warn_about_hardware_config(void) {
     static int once = 0;
@@ -556,8 +558,6 @@ _bitters_gpio_warn_about_hardware_config(void) {
 	"\n");
 }
 
-#if !defined(BITTERS_SILENCE_WARNING    ) &&				\
-    !defined(BITTERS_SILENCE_RPI_WARNING)
 #  define BITTERS_GPIO_WARN_ABOUT_HARDWARE_CONFIG()			\
     _bitters_gpio_warn_about_hardware_config()
 #else

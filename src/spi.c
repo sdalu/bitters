@@ -53,6 +53,8 @@
 
 
 
+#if !defined(BITTERS_SILENCE_WARNING            ) &&			\
+    !defined(BITTERS_SILENCE_SPI_BUFSIZE_WARNING)
 static void
 _bitters_spi_warn_about_bufsize_config(void) {
     static int once = 0;
@@ -67,8 +69,6 @@ _bitters_spi_warn_about_bufsize_config(void) {
 	"\n");
 }
 
-#if !defined(BITTERS_SILENCE_WARNING            ) &&			\
-    !defined(BITTERS_SILENCE_SPI_BUFSIZE_WARNING)
 #  define BITTERS_SPI_WARN_ABOUT_BUFSIZE_CONFIG()			\
     _bitters_spi_warn_about_bufsize_config()
 #else
@@ -232,11 +232,16 @@ bitters_spi_transfer(bitters_spi_t *spi,
 
     struct spi_ioc_transfer tr[count];
     for (unsigned int i = 0 ; i < count ; i++) {
-	/* Kernel spi_ioc_transfer.len is a 32-bit field */
-	if (xfr[i].len > (uint64_t)UINT32_MAX) {
+	/* Kernel spi_ioc_transfer.len is a 32-bit field.
+	 * Compiled only where size_t is wider than that: on a 32-bit
+	 * target the comparison can never be true, and a compiler that
+	 * says so (gcc -Wtype-limits) is right */
+#if SIZE_MAX > UINT32_MAX
+	if (xfr[i].len > (size_t)UINT32_MAX) {
 	    BITTERS_SPI_LOG("chunk %u too large (%zu)", i, xfr[i].len);
 	    return -EINVAL;
 	}
+#endif
 	memset(&tr[i], 0, sizeof(struct spi_ioc_transfer));
 	tr[i].tx_buf        = (unsigned long) xfr[i].tx;
 	tr[i].rx_buf        = (unsigned long) xfr[i].rx;

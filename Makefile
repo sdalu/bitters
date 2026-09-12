@@ -27,8 +27,8 @@
 # consumer needs no flag to match the library it links against.
 
 NAME      := bitters
-VERSION   := 0.1.0
-SOMAJOR   := 0
+VERSION   := 1.0.0
+SOMAJOR   := 1
 
 PREFIX    ?= /usr/local
 LIBDIR    ?= $(PREFIX)/lib

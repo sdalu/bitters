@@ -50,6 +50,8 @@
 
 /*== Internal functions ================================================*/
 
+#if !defined(BITTERS_SILENCE_WARNING    ) &&				\
+    !defined(BITTERS_SILENCE_RPI_WARNING)
 static void
 _bitters_i2c_warn_about_hardware_config(void) {
     static int once = 0;
@@ -67,8 +69,6 @@ _bitters_i2c_warn_about_hardware_config(void) {
 	"\n");
 }
 
-#if !defined(BITTERS_SILENCE_WARNING    ) &&				\
-    !defined(BITTERS_SILENCE_RPI_WARNING)
 #  define BITTERS_I2C_WARN_ABOUT_HARDWARE_CONFIG()			\
     _bitters_i2c_warn_about_hardware_config()
 #else
