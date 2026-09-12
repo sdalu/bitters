@@ -66,16 +66,22 @@ check-gpio: all
 	    else echo "FAIL (exit $$rc)"; fail=1; fi; \
 	done; exit $$fail
 
-# i2c bitfield view on other ABIs, by inspecting emitted initializer bytes.
+# i2c bitfield view on other ABIs, by inspecting the emitted `dir` byte.
 # Needs a cross-capable clang; override with  make endian CLANG=clang-XX
+# Only the struct.anon byte is read: padding differs per ABI (m68k emits a
+# single i8, powerpc64 a [7 x i8]), so a looser match would misreport.
+ENDIAN_TARGETS ?= x86_64 i386 aarch64 riscv64 \
+                  powerpc64 powerpc s390x mips mips64 sparc64 m68k \
+                  armeb aarch64_be
 endian:
 	@CLANG=$${CLANG:-`command -v clang22 || command -v clang || true`}; \
 	if [ -z "$$CLANG" ]; then \
 	    echo "  skipped: no cross-capable clang found (set CLANG=...)"; exit 0; fi; \
-	echo "using $$CLANG"; fail=0; for t in x86_64 aarch64 powerpc64 s390x mips; do \
+	echo "using $$CLANG"; fail=0; for t in $(ENDIAN_TARGETS); do \
 	  b=`$$CLANG -target $$t-unknown-linux-gnu -nostdlibinc -ffreestanding \
 	       -O0 -S -emit-llvm -I../include endian_probe.c -o - 2>/dev/null \
-	     | grep -oE 'i8 -?[0-9]+' | sed 's/i8 //' | tr '\n' ' '`; \
+	     | grep -oE '%struct\.anon \{ i8 -?[0-9]+ \}' \
+	     | sed -E 's/.*i8 (-?[0-9]+) \}/\1/' | tr '\n' ' '`; \
 	  if [ -z "$$b" ]; then \
 	      printf '  %-12s skipped (target not supported by this clang)\n' $$t; \
 	  elif [ "$$b" = "2 1 " ]; then \
