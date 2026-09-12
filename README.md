@@ -52,6 +52,22 @@ Linux is different. Hardware access has evolved through multiple approaches:
 you'd find in microcontroller SDKs, providing you with:
 **easier code migration**, **reduced learning curve**, **ioctl-style performance**
 
+```text
+  ┌──────────────────────────────────────────────────────────┐
+  │  your application, or a device SDK ported from an MCU    │
+  └────────────────────────────┬─────────────────────────────┘
+                               │  bitters_gpio_pin_write(&led, 1)
+  ┌────────────────────────────┴─────────────────────────────┐
+  │  bitters     gpio.c    spi.c    i2c.c    delay.c         │
+  └────────────────────────────┬─────────────────────────────┘
+                               │  ioctl()
+  ┌────────────────────────────┴─────────────────────────────┐
+  │  Linux   /dev/gpiochipN   /dev/spidevB.C   /dev/i2c-N    │
+  └────────────────────────────┬─────────────────────────────┘
+                               │
+                            hardware
+```
+
 
 
 Build and configuration
@@ -60,6 +76,7 @@ Build and configuration
 ### Building
 
 ```sh
+make help                       # targets, feature flags and their current values
 make                            # libbitters.so
 make check                      # tests that need no privilege
 sudo make check-gpio            # GPIO tests, see tests/README.md
@@ -71,24 +88,33 @@ make static                     # libbitters.a, to link into a single program
 
 Compiling the sources directly into your own build is supported too;
 there is nothing to configure beyond the feature flags. `make sources`
-prints what to compile and with which flags:
+emits shell variables so a build script can consume them, with absolute
+paths so the caller need not know where bitters sits:
 
 ```sh
-$ make sources
-sources : src/bitters.c src/delay.c src/gpio.c src/i2c.c src/spi.c
-include : include
-cflags  : -D_GNU_SOURCE -DBITTERS_WITH_THREADS -DBITTERS_WITH_GPIO_IRQ -Iinclude
-libs    : -lpthread
+$ make -s sources
+BITTERS_SOURCES='/path/to/bitters/src/bitters.c ... /path/to/bitters/src/spi.c'
+BITTERS_INCLUDE='/path/to/bitters/include'
+BITTERS_CFLAGS='-D_GNU_SOURCE -DBITTERS_WITH_THREADS -DBITTERS_WITH_GPIO_IRQ -I/path/to/bitters/include'
+BITTERS_LIBS='-lpthread'
 ```
 
-Only the `.c` files need `-D_GNU_SOURCE`; the public headers compile
-without any special flag.
+```sh
+eval "$(make -s -C 3rd/bitters sources)"
+cc $BITTERS_CFLAGS -c $BITTERS_SOURCES
+```
+
+`BITTERS_CFLAGS` is for compiling **bitters**, not for compiling against
+it: only the `.c` files need `-D_GNU_SOURCE`, and the public headers
+compile without any special flag. To build an application, use
+`pkg-config` (below).
 
 The tree builds warning-free with `-Wall -Wextra`; `make WERROR=yes`
 turns warnings into errors, which is what CI should use.
 
-Feature selection is done on the `make` command line, and `make features`
-reports what a given combination produces:
+Feature selection is done on the `make` command line; `make help` lists
+the flags with their current values, and `make features` reports what a
+given combination produces:
 
 ```sh
 make THREADS=yes GPIO_IRQ=yes ASSERT=no LOG=no
@@ -107,6 +133,10 @@ cc -o app app.c $(pkg-config --cflags --libs bitters)
 libraries to link. In particular it does not export `-D_GNU_SOURCE`:
 that is needed to compile bitters, not to use it.
 
+The flags below configure **bitters itself**, whether you build it with
+the Makefile or compile its sources into your own build. None of them is
+needed to compile an application against bitters.
+
 ### Basic Compilation
 
 Compile the `.c` files with `-D_GNU_SOURCE` to enable required GNU
@@ -114,16 +144,47 @@ extensions.
 
 ### Thread Support
 
-Add `-DBITTERS_WITH_THREADS` if your application uses threads.
+Build bitters with `-DBITTERS_WITH_THREADS` (`make THREADS=yes`, the
+default) for thread-safe operation and for the interrupt callbacks
+below. An application does not need the flag itself.
 
 ### GPIO IRQ Callbacks
 
 For interrupt callback processing (common when porting device SDKs):
-* Compile with `-DBITTERS_WITH_GPIO_IRQ -DBITTERS_WITH_THREADS`
+* Build bitters with `-DBITTERS_WITH_GPIO_IRQ -DBITTERS_WITH_THREADS`
+  (`make GPIO_IRQ=yes`, the default); thread support is required
 * The library uses `SIGUSR1` internally (can be customized via
   `-DBITTERS_SIGIRQ=SIGNAME`) to notify processing thread of callback setting
   modifications.
-* Thread support is required
+* Built without it, `bitters_gpio_irq_callback()` is still declared and
+  still links; it returns `-ENOSYS`
+
+Callbacks run on a thread bitters starts per gpiochip. It polls a private
+copy of the descriptor table, so registering or disabling a pin from
+another thread never races the poll, and it releases its lock around your
+callback, so the callback may itself enable, disable or re-register pins:
+
+```text
+      one interrupt processing thread per gpiochip
+
+      ┌───────────────────────────────────────────┐
+  ┌──▸│ copy the descriptor table under irq_lock  │
+  │   └─────────────────────┬─────────────────────┘
+  │                         ▾
+  │   ┌───────────────────────────────────────────┐
+  │   │ ppoll() the copy                          │◂── SIGUSR1 when a
+  │   └─────────────────────┬─────────────────────┘    registration
+  │                         ▾                         changes
+  │   ┌───────────────────────────────────────────┐
+  │   │ for every ready line that is still        │
+  │   │ registered, and still on the descriptor   │
+  │   │ we polled:                                │
+  │   │     read the event                        │
+  │   │     release irq_lock, run the callback,   │
+  │   │     retake it                             │
+  │   └─────────────────────┬─────────────────────┘
+  └─────────────────────────┘
+```
 
 ### Logging & Debug
 
@@ -189,6 +250,44 @@ It needs to be configured at boot time, using either
      for details.
 	 Example for pull up: adding entry `gpio=_pin-list_=pu`
 * device-tree
+
+### Raspberry Pi pin names
+
+`bitters/rpi.h` names the 40-pin header so you need not hard-code numbers:
+`BITTERS_RPI_P1_11` for a header position, `BITTERS_RPI_BCM_GPIO_17` for a
+BCM line, `BITTERS_RPI_SPI0_MOSI` and friends for the peripherals, and
+`BITTERS_RPI_GPIO_CHIP` for the controller.
+
+```text
+  ┌────────────────────────┬────┬────┬────────────────────────┐
+  │       P1 header        │odd │even│  BCM numbering         │
+  ├────────────────────────┼────┼────┼────────────────────────┤
+  │                    3V3 │ 1  │ 2  │ 5V                     │
+  │            SDA1  GPIO2 │ 3  │ 4  │ 5V                     │
+  │            SCL1  GPIO3 │ 5  │ 6  │ GND                    │
+  │          GPCLK0  GPIO4 │ 7  │ 8  │ GPIO14  TXD0           │
+  │                    GND │ 9  │ 10 │ GPIO15  RXD0           │
+  │       SPI1_CE1  GPIO17 │ 11 │ 12 │ GPIO18  PWM0 SPI1_CE0  │
+  │                 GPIO27 │ 13 │ 14 │ GND                    │
+  │                 GPIO22 │ 15 │ 16 │ GPIO23                 │
+  │                    3V3 │ 17 │ 18 │ GPIO24                 │
+  │      SPI0_MOSI  GPIO10 │ 19 │ 20 │ GND                    │
+  │       SPI0_MISO  GPIO9 │ 21 │ 22 │ GPIO25                 │
+  │      SPI0_SCLK  GPIO11 │ 23 │ 24 │ GPIO8  SPI0_CE0        │
+  │                    GND │ 25 │ 26 │ GPIO7  SPI0_CE1        │
+  │           ID_SD  GPIO0 │ 27 │ 28 │ GPIO1  ID_SC           │
+  │                  GPIO5 │ 29 │ 30 │ GND                    │
+  │                  GPIO6 │ 31 │ 32 │ GPIO12                 │
+  │           PWM1  GPIO13 │ 33 │ 34 │ GND                    │
+  │      SPI1_MISO  GPIO19 │ 35 │ 36 │ GPIO16  SPI1_CE2       │
+  │                 GPIO26 │ 37 │ 38 │ GPIO20  SPI1_MOSI      │
+  │                    GND │ 39 │ 40 │ GPIO21  SPI1_SCLK      │
+  └────────────────────────┴────┴────┴────────────────────────┘
+```
+
+The chip is named `gpiochip0`, which is right for the Pi 1 through 4; the
+Pi 5 moved the header GPIO to its RP1 southbridge and needs a different
+controller.
 
 
 ### API Functions
@@ -267,6 +366,13 @@ Getting started
 ~~~sh
 gcc ${bitters}/src/*.c -I ${bitters}/include .... \
     -D_GNU_SOURCE -DBITTERS_WITH_THREADS -DBITTERS_WITH_GPIO_IRQ -pthread
+~~~
+
+or let the Makefile hand you the same thing, so the flags cannot drift:
+
+~~~sh
+eval "$(make -s -C ${bitters} sources)"
+gcc $BITTERS_CFLAGS $BITTERS_SOURCES .... $BITTERS_LIBS
 ~~~
 
 The `-DBITTERS_WITH_GPIO_IRQ` flag is only needed if you use
