@@ -75,6 +75,8 @@ Build and configuration
 
 ### Building
 
+The Makefile works with both GNU make and BSD make.
+
 ```sh
 make help                       # targets, feature flags and their current values
 make                            # libbitters.so
@@ -110,7 +112,10 @@ compile without any special flag. To build an application, use
 `pkg-config` (below).
 
 The tree builds warning-free with `-Wall -Wextra`; `make WERROR=yes`
-turns warnings into errors, which is what CI should use.
+turns warnings into errors, which is what CI should use. Those warning
+flags are applied by the Makefile itself rather than through `CFLAGS`,
+because BSD make predefines `CFLAGS` and they would otherwise be dropped
+there; `CFLAGS` remains yours to set.
 
 Feature selection is done on the `make` command line; `make help` lists
 the flags with their current values, and `make features` reports what a

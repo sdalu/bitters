@@ -1,4 +1,8 @@
-# bitters -- build, install and test.   Requires GNU make.
+# bitters -- build, install and test.
+#
+# Portable between GNU make and BSD make: no conditionals, no pattern
+# rules, no GNU-only functions. Feature selection uses variable
+# indirection ($(T_$(THREADS))), which both makes expand the same way.
 #
 # Run `make help` for the targets and the variables you can override.
 #
@@ -22,9 +26,9 @@
 # not compiled in returns -ENOSYS rather than going missing, so a
 # consumer needs no flag to match the library it links against.
 
-NAME      := bitters
-VERSION   := 1.0.0
-SOMAJOR   := 1
+NAME       = bitters
+VERSION    = 1.0.0
+SOMAJOR    = 1
 
 PREFIX    ?= /usr/local
 LIBDIR    ?= $(PREFIX)/lib
@@ -36,106 +40,93 @@ CC        ?= cc
 AR        ?= ar
 INSTALL   ?= install
 DOXYGEN   ?= doxygen
-CFLAGS    ?= -O2 -g -Wall -Wextra
+# BSD make's sys.mk predefines CFLAGS, so `CFLAGS ?=` never applies there
+# and the warning set would be silently dropped. Keep the flags the
+# project requires in their own variable, always applied, and leave
+# CFLAGS to the user and to the environment.
+CFLAGS    ?= -O2 -g
+WARNINGS   = -Wall -Wextra
 LDFLAGS   ?=
 
-# Opt-in rather than default: a newer compiler inventing a new warning
-# should not break an ordinary user's build, but CI should stay clean.
-WERROR    ?= no
-ifeq ($(WERROR),yes)
-  CFLAGS  += -Werror
-endif
-
 # --- features ---------------------------------------------------------
+# Selected by indirection rather than conditionals, so that one Makefile
+# serves both makes: THREADS=yes picks $(T_yes), THREADS=no picks $(T_no).
 THREADS   ?= yes
 GPIO_IRQ  ?= yes
 ASSERT    ?= no
 LOG       ?= no
+# Opt-in rather than default: a newer compiler inventing a new warning
+# should not break an ordinary user's build, but CI should stay clean.
+WERROR    ?= no
 
-FEATURES  :=
-LIBS      :=
-ifeq ($(THREADS),yes)
-  FEATURES += -DBITTERS_WITH_THREADS
-  LIBS     += -lpthread
-endif
-ifeq ($(GPIO_IRQ),yes)
-  ifneq ($(THREADS),yes)
-    $(error GPIO_IRQ=yes requires THREADS=yes)
-  endif
-  FEATURES += -DBITTERS_WITH_GPIO_IRQ
-endif
-ifeq ($(ASSERT),yes)
-  FEATURES += -DBITTERS_GPIO_WITH_ASSERT -DBITTERS_SPI_WITH_ASSERT \
-              -DBITTERS_I2C_WITH_ASSERT
-endif
-ifeq ($(LOG),yes)
-  FEATURES += -DBITTERS_GPIO_WITH_LOG -DBITTERS_SPI_WITH_LOG \
-              -DBITTERS_I2C_WITH_LOG
-endif
+T_yes      = -DBITTERS_WITH_THREADS
+T_no       =
+P_yes      = -lpthread
+P_no       =
+G_yes      = -DBITTERS_WITH_GPIO_IRQ
+G_no       =
+A_yes      = -DBITTERS_GPIO_WITH_ASSERT -DBITTERS_SPI_WITH_ASSERT \
+             -DBITTERS_I2C_WITH_ASSERT
+A_no       =
+O_yes      = -DBITTERS_GPIO_WITH_LOG -DBITTERS_SPI_WITH_LOG \
+             -DBITTERS_I2C_WITH_LOG
+O_no       =
+W_yes      = -Werror
+W_no       =
+
+FEATURES   = $(T_$(THREADS)) $(G_$(GPIO_IRQ)) $(A_$(ASSERT)) $(O_$(LOG))
+LIBS       = $(P_$(THREADS))
 
 # Building bitters itself needs the feature flags and _GNU_SOURCE, which
 # src/gpio.c refuses to compile without. A consumer needs neither: the
 # headers are flag-independent and compile without _GNU_SOURCE, so
 # bitters.pc exports nothing but the include path.
-ALL_CPPFLAGS    := -D_GNU_SOURCE $(FEATURES) -Iinclude -Isrc $(CPPFLAGS)
+ALL_CPPFLAGS = -D_GNU_SOURCE $(FEATURES) -Iinclude -Isrc $(CPPFLAGS)
+ALL_CFLAGS   = $(CFLAGS) $(WARNINGS) $(W_$(WERROR))
 
-SRC       := $(wildcard src/*.c)
-OBJ       := $(SRC:.c=.o)
-PICOBJ    := $(SRC:.c=.lo)
+# Listed rather than globbed: $(wildcard) is GNU-only, and an explicit
+# list is what a vendoring consumer wants from `make sources` anyway.
+SRC        = src/bitters.c src/delay.c src/gpio.c src/i2c.c src/spi.c
+OBJ        = $(SRC:.c=.o)
+PICOBJ     = $(SRC:.c=.lo)
 
-STATIC    := lib$(NAME).a
-SONAME    := lib$(NAME).so.$(SOMAJOR)
-SHARED    := lib$(NAME).so.$(VERSION)
+STATIC     = lib$(NAME).a
+SONAME     = lib$(NAME).so.$(SOMAJOR)
+SHARED     = lib$(NAME).so.$(VERSION)
 
-HEADERS   := include/bitters.h
-SUBHEADERS:= $(wildcard include/bitters/*.h)
+HEADERS    = include/bitters.h
+SUBHEADERS = include/bitters/delay.h include/bitters/gpio.h \
+             include/bitters/i2c.h include/bitters/rpi.h include/bitters/spi.h
 
-help:				## show this help
-	@echo 'bitters -- microcontroller-style GPIO, SPI and I2C for Linux'
-	@echo
-	@echo 'Targets:'
-	@awk -F':.*## ' '/^[a-z][a-z-]*:.*## /{printf "  %-12s %s\n", $$1, $$2}' \
-	    $(firstword $(MAKEFILE_LIST))
-	@echo
-	@echo 'Features (build-time only; the public API never depends on them):'
-	@printf '  %-12s %-5s %s\n' \
-	    THREADS  '$(THREADS)'  'thread support' \
-	    GPIO_IRQ '$(GPIO_IRQ)' 'interrupt callbacks (implies THREADS=yes)' \
-	    ASSERT   '$(ASSERT)'   'assertions in gpio/spi/i2c' \
-	    LOG      '$(LOG)'      'logging to stderr'
-	@echo
-	@echo 'Other variables (current value):'
-	@printf '  %-12s %s\n' \
-	    CC       '$(CC)' \
-	    CFLAGS   '$(CFLAGS)' \
-	    WERROR   '$(WERROR)  (yes turns warnings into errors)' \
-	    PREFIX   '$(PREFIX)' \
-	    DESTDIR  '$(DESTDIR)  (staging prefix for packaging)'
-	@echo
-	@echo 'The test suite has its own targets; see tests/README.md.'
-
-.PHONY: all static shared check check-gpio doc install uninstall clean \
-	distclean features sources help
+.SUFFIXES:
+.SUFFIXES: .c .o .lo
 
 # Shared by default; the static archive is opt-in.
-all: shared			## build the shared library (default)
+all: featurecheck shared				## build the shared library (default)
 
-static: $(STATIC)		## build libbitters.a, to link into one program
-shared: $(SHARED)		## build libbitters.so
+static: $(STATIC)				## build libbitters.a, to link into one program
+shared: $(SHARED)				## build libbitters.so
+
+# GPIO_IRQ=yes without THREADS=yes is rejected by src/gpio.c with an
+# #error; this catches it before the compiler does. It cannot be a
+# parse-time check, since $(error) is GNU-only.
+featurecheck:
+	@if [ "$(GPIO_IRQ)" = yes ] && [ "$(THREADS)" != yes ]; then \
+	    echo "make: GPIO_IRQ=yes requires THREADS=yes" >&2; exit 1; fi
 
 $(STATIC): $(OBJ)
-	$(AR) rcs $@ $^
+	$(AR) rcs $@ $(OBJ)
 
 $(SHARED): $(PICOBJ)
-	$(CC) -shared -Wl,-soname,$(SONAME) $(LDFLAGS) -o $@ $^ $(LIBS)
+	$(CC) -shared -Wl,-soname,$(SONAME) $(LDFLAGS) -o $@ $(PICOBJ) $(LIBS)
 	ln -sf $(SHARED) $(SONAME)
 	ln -sf $(SONAME) lib$(NAME).so
 
-%.o: %.c
-	$(CC) $(CFLAGS) $(ALL_CPPFLAGS) -c -o $@ $<
+.c.o:
+	$(CC) $(ALL_CFLAGS) $(ALL_CPPFLAGS) -c -o $@ $<
 
-%.lo: %.c
-	$(CC) $(CFLAGS) $(ALL_CPPFLAGS) -fPIC -c -o $@ $<
+.c.lo:
+	$(CC) $(ALL_CFLAGS) $(ALL_CPPFLAGS) -fPIC -c -o $@ $<
 
 # Depends on the Makefile: a stale .pc carrying the previous feature set
 # is exactly the drift it exists to prevent.
@@ -151,8 +142,7 @@ $(NAME).pc: Makefile
 	  'Libs: -L$${libdir} -l$(NAME) $(LIBS)' \
 	  'Cflags: -I$${includedir}' > $@
 
-# Report exactly how this tree would be built.
-features:			## print the feature selection in force
+features:					## print the feature selection in force
 	@echo 'THREADS=$(THREADS) GPIO_IRQ=$(GPIO_IRQ) ASSERT=$(ASSERT) LOG=$(LOG)'
 	@echo 'build cppflags : $(FEATURES)'
 	@echo 'libs           : $(LIBS)'
@@ -164,27 +154,29 @@ features:			## print the feature selection in force
 #     cc $$BITTERS_CFLAGS -c $$BITTERS_SOURCES
 #
 # Paths are absolute, so the caller need not know where bitters sits.
-# Only the .c files need -D_GNU_SOURCE; the public headers do not, which
-# is why BITTERS_CFLAGS is for compiling bitters and not for compiling
-# against it -- use pkg-config for that.
-sources:			## print vendoring files and flags as shell variables
-	@printf "BITTERS_SOURCES='%s'\n" '$(strip $(abspath $(SRC)))'
-	@printf "BITTERS_INCLUDE='%s'\n" '$(strip $(abspath include))'
-	@printf "BITTERS_CFLAGS='%s'\n"  '$(strip -D_GNU_SOURCE $(FEATURES) -I$(abspath include))'
-	@printf "BITTERS_LIBS='%s'\n"    '$(strip $(LIBS))'
+sources:					## print vendoring files and flags as shell variables
+	@d=`pwd`; out=""; \
+	 for f in $(SRC); do \
+	     if [ -z "$$out" ]; then out="$$d/$$f"; else out="$$out $$d/$$f"; fi; \
+	 done; \
+	 printf "BITTERS_SOURCES='%s'\n" "$$out"; \
+	 printf "BITTERS_INCLUDE='%s'\n" "$$d/include"; \
+	 printf "BITTERS_CFLAGS='%s'\n" \
+	     "`echo -D_GNU_SOURCE $(FEATURES) -I$$d/include | tr -s ' '`"; \
+	 printf "BITTERS_LIBS='%s'\n" "`echo $(LIBS) | tr -s ' '`"
 
-check:				## run the tests needing no privilege
-	$(MAKE) -C tests check
+check:						## run the tests needing no privilege
+	cd tests && $(MAKE) check
 
-check-gpio:			## run the GPIO tests (needs root + gpio-mockup)
-	$(MAKE) -C tests check-gpio
+check-gpio:					## run the GPIO tests (needs root + gpio-mockup)
+	cd tests && $(MAKE) check-gpio
 
-doc:				## generate the Doxygen documentation into doc/
+doc:						## generate the Doxygen documentation into doc/
 	$(DOXYGEN) Doxyfile
 
 # Installs whatever was built: the shared library always, the archive
 # only if `make static` produced one.
-install: shared $(NAME).pc	## install headers, library and bitters.pc
+install: shared $(NAME).pc			## install headers, library and bitters.pc
 	$(INSTALL) -d $(DESTDIR)$(INCLUDEDIR)/bitters
 	$(INSTALL) -m 644 $(HEADERS)    $(DESTDIR)$(INCLUDEDIR)
 	$(INSTALL) -m 644 $(SUBHEADERS) $(DESTDIR)$(INCLUDEDIR)/bitters
@@ -199,7 +191,7 @@ install: shared $(NAME).pc	## install headers, library and bitters.pc
 	$(INSTALL) -d $(DESTDIR)$(PKGCONFDIR)
 	$(INSTALL) -m 644 $(NAME).pc $(DESTDIR)$(PKGCONFDIR)
 
-uninstall:			## remove what install put down
+uninstall:					## remove what install put down
 	rm -f  $(DESTDIR)$(INCLUDEDIR)/bitters.h
 	rm -rf $(DESTDIR)$(INCLUDEDIR)/bitters
 	rm -f  $(DESTDIR)$(LIBDIR)/$(STATIC) \
@@ -208,10 +200,38 @@ uninstall:			## remove what install put down
 	       $(DESTDIR)$(LIBDIR)/lib$(NAME).so \
 	       $(DESTDIR)$(PKGCONFDIR)/$(NAME).pc
 
-clean:				## remove build products
+clean:						## remove build products
 	rm -f $(OBJ) $(PICOBJ) $(STATIC) $(SHARED) $(SONAME) lib$(NAME).so \
 	      $(NAME).pc
-	$(MAKE) -C tests clean
+	cd tests && $(MAKE) clean
 
-distclean: clean		## clean, plus the generated documentation
+distclean: clean				## clean, plus the generated documentation
 	rm -rf doc/html doc/latex
+
+help:						## show this help
+	@echo 'bitters -- microcontroller-style GPIO, SPI and I2C for Linux'
+	@echo ''
+	@echo 'Targets:'
+	@awk -F':.*## ' '/^[a-z][a-z-]*:.*## /{printf "  %-12s %s\n", $$1, $$2}' \
+	    Makefile
+	@echo ''
+	@echo 'Features (build-time only; the public API never depends on them):'
+	@printf '  %-12s %-5s %s\n' \
+	    THREADS  '$(THREADS)'  'thread support' \
+	    GPIO_IRQ '$(GPIO_IRQ)' 'interrupt callbacks (implies THREADS=yes)' \
+	    ASSERT   '$(ASSERT)'   'assertions in gpio/spi/i2c' \
+	    LOG      '$(LOG)'      'logging to stderr'
+	@echo ''
+	@echo 'Other variables (current value):'
+	@printf '  %-12s %s\n' \
+	    CC       '$(CC)' \
+	    CFLAGS   '$(CFLAGS)  (yours; the project always adds $(WARNINGS))' \
+	    WERROR   '$(WERROR)  (yes turns warnings into errors)' \
+	    PREFIX   '$(PREFIX)' \
+	    DESTDIR  '$(DESTDIR)  (staging prefix for packaging)'
+	@echo ''
+	@echo 'This Makefile works with both GNU make and BSD make.'
+	@echo 'The test suite has its own targets; see tests/README.md.'
+
+.PHONY: all static shared featurecheck check check-gpio doc install \
+	uninstall clean distclean features sources help
