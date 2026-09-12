@@ -1,10 +1,6 @@
 # bitters -- build, install and test.   Requires GNU make.
 #
-#   make                       build the shared library
-#   make check                 run the test suite (see tests/README.md)
-#   make install PREFIX=/usr   install headers, the library and bitters.pc
-#   make doc                   generate the Doxygen documentation
-#   make sources               list what to compile if you vendor it
+# Run `make help` for the targets and the variables you can override.
 #
 # The default is the shared library; `make static` builds an archive
 # instead, for linking bitters into a single program.
@@ -94,14 +90,38 @@ SHARED    := lib$(NAME).so.$(VERSION)
 HEADERS   := include/bitters.h
 SUBHEADERS:= $(wildcard include/bitters/*.h)
 
+help:				## show this help
+	@echo 'bitters -- microcontroller-style GPIO, SPI and I2C for Linux'
+	@echo
+	@echo 'Targets:'
+	@awk -F':.*## ' '/^[a-z][a-z-]*:.*## /{printf "  %-12s %s\n", $$1, $$2}' \
+	    $(firstword $(MAKEFILE_LIST))
+	@echo
+	@echo 'Features (build-time only; the public API never depends on them):'
+	@printf '  %-12s %-5s %s\n' \
+	    THREADS  '$(THREADS)'  'thread support' \
+	    GPIO_IRQ '$(GPIO_IRQ)' 'interrupt callbacks (implies THREADS=yes)' \
+	    ASSERT   '$(ASSERT)'   'assertions in gpio/spi/i2c' \
+	    LOG      '$(LOG)'      'logging to stderr'
+	@echo
+	@echo 'Other variables (current value):'
+	@printf '  %-12s %s\n' \
+	    CC       '$(CC)' \
+	    CFLAGS   '$(CFLAGS)' \
+	    WERROR   '$(WERROR)  (yes turns warnings into errors)' \
+	    PREFIX   '$(PREFIX)' \
+	    DESTDIR  '$(DESTDIR)  (staging prefix for packaging)'
+	@echo
+	@echo 'The test suite has its own targets; see tests/README.md.'
+
 .PHONY: all static shared check check-gpio doc install uninstall clean \
-	distclean features sources
+	distclean features sources help
 
 # Shared by default; the static archive is opt-in.
-all: shared
+all: shared			## build the shared library (default)
 
-static: $(STATIC)
-shared: $(SHARED)
+static: $(STATIC)		## build libbitters.a, to link into one program
+shared: $(SHARED)		## build libbitters.so
 
 $(STATIC): $(OBJ)
 	$(AR) rcs $@ $^
@@ -132,31 +152,39 @@ $(NAME).pc: Makefile
 	  'Cflags: -I$${includedir}' > $@
 
 # Report exactly how this tree would be built.
-features:
+features:			## print the feature selection in force
 	@echo 'THREADS=$(THREADS) GPIO_IRQ=$(GPIO_IRQ) ASSERT=$(ASSERT) LOG=$(LOG)'
 	@echo 'build cppflags : $(FEATURES)'
 	@echo 'libs           : $(LIBS)'
 
-# Everything needed to compile bitters straight into another project.
-sources:
-	@echo 'sources : $(SRC)'
-	@echo 'include : include'
-	@echo 'cflags  : -D_GNU_SOURCE $(FEATURES) -Iinclude'
-	@echo 'libs    : $(LIBS)'
-	@echo '(the public headers need no flags; only the .c files need -D_GNU_SOURCE)'
+# Everything needed to compile bitters straight into another project,
+# emitted as shell variables so a build script can consume it:
+#
+#     eval "$$(make -s -C 3rd/bitters sources)"
+#     cc $$BITTERS_CFLAGS -c $$BITTERS_SOURCES
+#
+# Paths are absolute, so the caller need not know where bitters sits.
+# Only the .c files need -D_GNU_SOURCE; the public headers do not, which
+# is why BITTERS_CFLAGS is for compiling bitters and not for compiling
+# against it -- use pkg-config for that.
+sources:			## print vendoring files and flags as shell variables
+	@printf "BITTERS_SOURCES='%s'\n" '$(strip $(abspath $(SRC)))'
+	@printf "BITTERS_INCLUDE='%s'\n" '$(strip $(abspath include))'
+	@printf "BITTERS_CFLAGS='%s'\n"  '$(strip -D_GNU_SOURCE $(FEATURES) -I$(abspath include))'
+	@printf "BITTERS_LIBS='%s'\n"    '$(strip $(LIBS))'
 
-check:
+check:				## run the tests needing no privilege
 	$(MAKE) -C tests check
 
-check-gpio:
+check-gpio:			## run the GPIO tests (needs root + gpio-mockup)
 	$(MAKE) -C tests check-gpio
 
-doc:
+doc:				## generate the Doxygen documentation into doc/
 	$(DOXYGEN) Doxyfile
 
 # Installs whatever was built: the shared library always, the archive
 # only if `make static` produced one.
-install: shared $(NAME).pc
+install: shared $(NAME).pc	## install headers, library and bitters.pc
 	$(INSTALL) -d $(DESTDIR)$(INCLUDEDIR)/bitters
 	$(INSTALL) -m 644 $(HEADERS)    $(DESTDIR)$(INCLUDEDIR)
 	$(INSTALL) -m 644 $(SUBHEADERS) $(DESTDIR)$(INCLUDEDIR)/bitters
@@ -171,7 +199,7 @@ install: shared $(NAME).pc
 	$(INSTALL) -d $(DESTDIR)$(PKGCONFDIR)
 	$(INSTALL) -m 644 $(NAME).pc $(DESTDIR)$(PKGCONFDIR)
 
-uninstall:
+uninstall:			## remove what install put down
 	rm -f  $(DESTDIR)$(INCLUDEDIR)/bitters.h
 	rm -rf $(DESTDIR)$(INCLUDEDIR)/bitters
 	rm -f  $(DESTDIR)$(LIBDIR)/$(STATIC) \
@@ -180,10 +208,10 @@ uninstall:
 	       $(DESTDIR)$(LIBDIR)/lib$(NAME).so \
 	       $(DESTDIR)$(PKGCONFDIR)/$(NAME).pc
 
-clean:
+clean:				## remove build products
 	rm -f $(OBJ) $(PICOBJ) $(STATIC) $(SHARED) $(SONAME) lib$(NAME).so \
 	      $(NAME).pc
 	$(MAKE) -C tests clean
 
-distclean: clean
+distclean: clean		## clean, plus the generated documentation
 	rm -rf doc/html doc/latex
