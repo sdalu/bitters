@@ -164,10 +164,14 @@ static pthread_mutex_t bitters_gpio_pins_lock = PTHREAD_MUTEX_INITIALIZER;
 static __thread int bitters_gpio_in_irq_thread = 0;
 #endif
 
+#if defined(BITTERS_WITH_GPIO_IRQ) && defined(BITTERS_WITH_THREADS)
+/* Installed solely so that BITTERS_SIGIRQ interrupts a blocking ppoll();
+ * the signal carries no information of its own */
 static void
 _bitters_gpio_sigirq(int a) {
-    /* Nothing */
+    (void)a;
 }
+#endif
 
 
 static void
@@ -419,7 +423,7 @@ _bitters_gpio_ctrl_create(const char *devname)
 	BITTERS_GPIO_LOG("failed to allocate memory for interrupt polling");
 	goto failed;
     }
-    for (int i = 0 ; i < cinfo.lines ; i++) {
+    for (int i = 0 ; i < ctrl->lines ; i++) {
 	ctrl->fds[i].fd = -1;
     }
     BITTERS_GPIO_LOG("found %u lines for %s (%s)",
@@ -1005,6 +1009,7 @@ bitters_gpio_irq_callback(bitters_gpio_pin_t *pin,
     return 0;
 #else
     /* Not supported */
+    (void)cb; (void)args;
     return -ENOSYS;
 #endif
 }

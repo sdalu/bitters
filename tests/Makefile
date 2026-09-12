@@ -10,6 +10,10 @@
 
 CC      ?= cc
 CFLAGS  ?= -O1 -g -Wall -Wextra
+WERROR  ?= no
+ifeq ($(WERROR),yes)
+  CFLAGS += -Werror
+endif
 CPPFLAGS = -D_GNU_SOURCE -DBITTERS_WITH_THREADS -DBITTERS_WITH_GPIO_IRQ \
            -I../include -I../src
 LDLIBS   = -lpthread

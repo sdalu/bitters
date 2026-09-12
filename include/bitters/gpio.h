@@ -171,7 +171,7 @@ typedef void (*bitters_gpio_irq_cb_t)(struct bitters_gpio_pin *pin, void *args);
  * GPIO pin configuration.
  */
 typedef struct bitters_gpio_cfg {
-    char    *label;	/**< IO: informative label for system information */
+    const char *label;	/**< IO: informative label for system information */
     uint8_t  dir;	/**< IO: gpio direction (input | output)  	  */
     uint8_t  mode;	/**<  O: gpio mode (open drain, open source, ...) */
     uint8_t  bias;	/**< I : gpio bias (pull-up, pull-down, ...)	  */
@@ -186,7 +186,7 @@ typedef struct bitters_gpio_cfg {
  */
 typedef struct bitters_gpio_pin {
     int   id;				/**< pin id			*/
-    char *ctrl_devname;			/**< controller device name	*/
+    const char *ctrl_devname;		/**< controller device name	*/
     /* private */
     uint8_t flags;			// Flags for configuration state
     struct bitters_gpio_ctrl *ctrl;	// Back pointer on controller

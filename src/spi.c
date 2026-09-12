@@ -106,7 +106,7 @@ bitters_spi_enable(bitters_spi_t *spi, bitters_spi_cfg_t *cfg)
 
     char path[18]; /* Enough room for: /dev/spidev00.00 */
     rc = snprintf(path, sizeof(path), "/dev/spidev%d.%d", spi->id, ce);
-    if ((rc < 0) || (rc >= sizeof(path))) {
+    if ((rc < 0) || ((size_t)rc >= sizeof(path))) {
 	rc = -ENOMEM;
 	BITTERS_SPI_LOG("failed to build path for spidev");
 	goto failed;

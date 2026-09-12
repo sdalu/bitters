@@ -66,6 +66,9 @@ sudo make check-gpio            # GPIO tests, see tests/README.md
 sudo make install PREFIX=/usr
 ```
 
+The tree builds warning-free with `-Wall -Wextra`; `make WERROR=yes`
+turns warnings into errors, which is what CI should use.
+
 Feature selection is done on the `make` command line, and `make features`
 reports what a given combination produces:
 

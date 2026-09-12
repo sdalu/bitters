@@ -9,6 +9,9 @@
 #
 #   make THREADS=yes GPIO_IRQ=yes ASSERT=no LOG=no
 #
+# The tree builds warning-free with -Wall -Wextra; `make WERROR=yes`
+# turns warnings into errors (use it in CI).
+#
 # NOTE: the feature flags change the layout of bitters_gpio_pin_t, so an
 # application MUST be compiled with the same set as the library. The
 # generated bitters.pc carries them in Cflags for exactly that reason;
@@ -31,6 +34,13 @@ INSTALL   ?= install
 DOXYGEN   ?= doxygen
 CFLAGS    ?= -O2 -g -Wall -Wextra
 LDFLAGS   ?=
+
+# Opt-in rather than default: a newer compiler inventing a new warning
+# should not break an ordinary user's build, but CI should stay clean.
+WERROR    ?= no
+ifeq ($(WERROR),yes)
+  CFLAGS  += -Werror
+endif
 
 # --- features ---------------------------------------------------------
 THREADS   ?= yes

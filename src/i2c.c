@@ -102,7 +102,7 @@ bitters_i2c_enable(bitters_i2c_t *i2c, bitters_i2c_cfg_t *cfg)
      */
     char path[13]; /* Enough room for: /dev/i2c-000 */
     rc = snprintf(path, sizeof(path), "/dev/i2c-%d", i2c->id);
-    if ((rc < 0) || (rc >= sizeof(path))) {
+    if ((rc < 0) || ((size_t)rc >= sizeof(path))) {
 	rc = -ENOMEM;
 	BITTERS_I2C_LOG("failed to build path for i2cdev");
 	goto failed;
@@ -185,6 +185,8 @@ bitters_i2c_disable(bitters_i2c_t *i2c)
 int
 bitters_i2c_set_speed(bitters_i2c_t *i2c, uint32_t speed)
 {
+    /* The bus speed is a property of the platform, fixed at boot */
+    (void)i2c; (void)speed;
     BITTERS_I2C_WARN_ABOUT_HARDWARE_CONFIG();
     return -ENOSYS;
 }
