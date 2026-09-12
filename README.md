@@ -60,11 +60,29 @@ Build and configuration
 ### Building
 
 ```sh
-make                            # static + shared library
+make                            # libbitters.so
 make check                      # tests that need no privilege
 sudo make check-gpio            # GPIO tests, see tests/README.md
-sudo make install PREFIX=/usr
+sudo make install PREFIX=/usr   # headers, libbitters.so, bitters.pc
+make static                     # libbitters.a, to link into a single program
 ```
+
+### Vendoring
+
+Compiling the sources directly into your own build is supported too;
+there is nothing to configure beyond the feature flags. `make sources`
+prints what to compile and with which flags:
+
+```sh
+$ make sources
+sources : src/bitters.c src/delay.c src/gpio.c src/i2c.c src/spi.c
+include : include
+cflags  : -D_GNU_SOURCE -DBITTERS_WITH_THREADS -DBITTERS_WITH_GPIO_IRQ -Iinclude
+libs    : -lpthread
+```
+
+Only the `.c` files need `-D_GNU_SOURCE`; the public headers compile
+without any special flag.
 
 The tree builds warning-free with `-Wall -Wextra`; `make WERROR=yes`
 turns warnings into errors, which is what CI should use.
@@ -85,10 +103,15 @@ installed `bitters.pc` carries them, so building against
 cc -o app app.c $(pkg-config --cflags --libs bitters)
 ```
 
+`bitters.pc` exports the feature flags, because the headers are
+conditional on them, but not `-D_GNU_SOURCE`: that is needed to compile
+bitters itself, not to use it, and forcing it on your sources would be
+presumptuous.
+
 ### Basic Compilation
 
-If you compile the sources directly instead, compile with `-D_GNU_SOURCE`
-to enable required GNU extensions.
+Compile the `.c` files with `-D_GNU_SOURCE` to enable required GNU
+extensions.
 
 ### Thread Support
 

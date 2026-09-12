@@ -1,9 +1,18 @@
 # bitters -- build, install and test.   Requires GNU make.
 #
-#   make                       build static + shared library
+#   make                       build the shared library
 #   make check                 run the test suite (see tests/README.md)
-#   make install PREFIX=/usr   install headers, libraries and bitters.pc
+#   make install PREFIX=/usr   install headers, the library and bitters.pc
 #   make doc                   generate the Doxygen documentation
+#   make sources               list what to compile if you vendor it
+#
+# The default is the shared library; `make static` builds an archive
+# instead, for linking bitters into a single program.
+#
+# Vendoring is supported too -- there is nothing to configure at build
+# time beyond the feature flags. `make sources` prints the files and the
+# flags to compile them with. Note that the public headers need no
+# special flags; only the .c files require -D_GNU_SOURCE.
 #
 # Feature selection (see README.md):
 #
@@ -69,9 +78,15 @@ ifeq ($(LOG),yes)
               -DBITTERS_I2C_WITH_LOG
 endif
 
-# _GNU_SOURCE is not optional: src/gpio.c refuses to compile without it.
-PUBLIC_CPPFLAGS := -D_GNU_SOURCE $(FEATURES)
-ALL_CPPFLAGS    := $(PUBLIC_CPPFLAGS) -Iinclude -Isrc $(CPPFLAGS)
+# What a consumer of the installed library needs. The feature flags are
+# in here because the headers are conditional on them (gpio.h only
+# declares bitters_gpio_irq_callback() under BITTERS_WITH_THREADS).
+# _GNU_SOURCE is deliberately NOT: the public headers compile without it,
+# and exporting it would force it on the consumer's own sources.
+PUBLIC_CPPFLAGS := $(FEATURES)
+
+# What building bitters itself needs; src/gpio.c refuses without _GNU_SOURCE.
+ALL_CPPFLAGS    := -D_GNU_SOURCE $(PUBLIC_CPPFLAGS) -Iinclude -Isrc $(CPPFLAGS)
 
 SRC       := $(wildcard src/*.c)
 OBJ       := $(SRC:.c=.o)
@@ -84,9 +99,11 @@ SHARED    := lib$(NAME).so.$(VERSION)
 HEADERS   := include/bitters.h
 SUBHEADERS:= $(wildcard include/bitters/*.h)
 
-.PHONY: all static shared check check-gpio doc install uninstall clean distclean features
+.PHONY: all static shared check check-gpio doc install uninstall clean \
+	distclean features sources
 
-all: static shared
+# Shared by default; the static archive is opt-in.
+all: shared
 
 static: $(STATIC)
 shared: $(SHARED)
@@ -125,6 +142,14 @@ features:
 	@echo 'public cppflags: $(PUBLIC_CPPFLAGS)'
 	@echo 'libs           : $(LIBS)'
 
+# Everything needed to compile bitters straight into another project.
+sources:
+	@echo 'sources : $(SRC)'
+	@echo 'include : include'
+	@echo 'cflags  : -D_GNU_SOURCE $(PUBLIC_CPPFLAGS) -Iinclude'
+	@echo 'libs    : $(LIBS)'
+	@echo '(the public headers need no flags; only the .c files need -D_GNU_SOURCE)'
+
 check:
 	$(MAKE) -C tests check
 
@@ -134,15 +159,20 @@ check-gpio:
 doc:
 	$(DOXYGEN) Doxyfile
 
-install: all $(NAME).pc
+# Installs whatever was built: the shared library always, the archive
+# only if `make static` produced one.
+install: shared $(NAME).pc
 	$(INSTALL) -d $(DESTDIR)$(INCLUDEDIR)/bitters
 	$(INSTALL) -m 644 $(HEADERS)    $(DESTDIR)$(INCLUDEDIR)
 	$(INSTALL) -m 644 $(SUBHEADERS) $(DESTDIR)$(INCLUDEDIR)/bitters
 	$(INSTALL) -d $(DESTDIR)$(LIBDIR)
-	$(INSTALL) -m 644 $(STATIC) $(DESTDIR)$(LIBDIR)
 	$(INSTALL) -m 755 $(SHARED) $(DESTDIR)$(LIBDIR)
 	ln -sf $(SHARED) $(DESTDIR)$(LIBDIR)/$(SONAME)
 	ln -sf $(SONAME) $(DESTDIR)$(LIBDIR)/lib$(NAME).so
+	@if [ -f $(STATIC) ]; then \
+	    echo "$(INSTALL) -m 644 $(STATIC) $(DESTDIR)$(LIBDIR)"; \
+	    $(INSTALL) -m 644 $(STATIC) $(DESTDIR)$(LIBDIR); \
+	fi
 	$(INSTALL) -d $(DESTDIR)$(PKGCONFDIR)
 	$(INSTALL) -m 644 $(NAME).pc $(DESTDIR)$(PKGCONFDIR)
 
