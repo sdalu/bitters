@@ -191,10 +191,14 @@ typedef struct bitters_gpio_pin {
     uint8_t flags;			// Flags for configuration state
     struct bitters_gpio_ctrl *ctrl;	// Back pointer on controller
     int fd;				// File descriptor for pin
-#if defined(BITTERS_WITH_THREADS)
+    /* Present in every configuration on purpose. These used to be
+     * conditional on BITTERS_WITH_THREADS, which made the size and
+     * layout of this caller-allocated structure depend on a compile
+     * flag: a library and an application built with different settings
+     * disagreed about it with no link error and no warning. The two
+     * pointers cost less than that hazard. */
     bitters_gpio_irq_cb_t irq_cb;	// Callback for irq processing
     void *irq_cb_args;			// Data pointer for irq callback
-#endif
 } bitters_gpio_pin_t;
 
 
@@ -283,7 +287,8 @@ int bitters_gpio_irq_fill_pollfd(bitters_gpio_pin_t *pin, struct pollfd *pfd);
  * @param pin 		pin identification
  * @param cb		callback (use NULL to disable)
  * @param args		argument passed to the callback
- * @return -ENOSYS	if not compiled with thread support
+ * @return -ENOSYS	if not compiled with BITTERS_WITH_GPIO_IRQ and
+ *			BITTERS_WITH_THREADS
  * @return < 0 in case of error (-errno)
  */
 int bitters_gpio_irq_callback(bitters_gpio_pin_t *pin,

@@ -21,7 +21,7 @@ ASSERTED = t_init_repeat
 # t_pins_dangling #includes ../src/gpio.c itself for the private struct.
 SELFCONTAINED = t_pins_dangling
 
-PLAIN = t_i2c_endian
+PLAIN = t_i2c_endian t_delay
 GPIO  = t_init_repeat t_irq_delivery t_irq_sibling_reconfig t_pins_dangling \
         t_race_after t_race_enable t_lock_stress t_errno t_c8 t_starvation \
         t_soak t_allocfail t_cross_teardown t_irq_wait
@@ -31,6 +31,9 @@ all: $(PLAIN) $(GPIO) $(SUPPORT)
 
 t_i2c_endian: t_i2c_endian.c
 	$(CC) $(CFLAGS) $(CPPFLAGS) -o $@ $<
+
+t_delay: t_delay.c ../src/delay.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) -o $@ $^ $(LDLIBS)
 
 t_init_repeat: t_init_repeat.c ../src/gpio.c
 	$(CC) $(CFLAGS) $(CPPFLAGS) -o $@ $^ $(LDLIBS)
@@ -51,8 +54,9 @@ MOCKUPS := $(shell gpiodetect 2>/dev/null | sed -n 's/^\(gpiochip[0-9]*\) \[gpio
 CHIP    ?= $(word 1,$(MOCKUPS))
 CHIP2   ?= $(word 2,$(MOCKUPS))
 
-check: t_i2c_endian
+check: t_i2c_endian t_delay
 	./t_i2c_endian
+	./t_delay
 
 check-gpio: all
 	@test -n "$(CHIP)" || { echo "no gpio-mockup chip: modprobe gpio-mockup gpio_mockup_ranges=-1,8,-1,8"; exit 1; }

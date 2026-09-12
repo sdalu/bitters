@@ -135,6 +135,8 @@ int bitters_spi_disable(bitters_spi_t *spi);
 /**
  * Change speed of SPI bus.
  * @note The new speed takes effect on the next transfer.
+ * @note bitters_spi_enable() applies the speed from its configuration,
+ *       so a value set before enabling is superseded by it.
  *
  * @param spi		SPI interface
  * @param speed		bus speed in Hz
@@ -145,6 +147,9 @@ int bitters_spi_set_speed(bitters_spi_t *spi, uint32_t speed);
 /**
  * Change word size of SPI bus.
  * @note The new word size takes effect on the next transfer.
+ * @note bitters_spi_enable() applies the word size from its
+ *       configuration, so a value set before enabling is superseded
+ *       by it.
  *
  * @param spi		SPI interface
  * @param word		word size (usually 8 or 16)

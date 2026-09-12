@@ -41,6 +41,7 @@ What each test pins down
 | `t_errno` | `errno` surviving the cleanup in `_bitters_gpio_ctrl_create()` |
 | `t_soak` | descriptor leak and `O_NONBLOCK` restore over 400 enable/disable cycles |
 | `t_allocfail` | allocation-failure paths in controller creation leaking descriptors |
+| `t_delay` | a delay being cut short by an ordinary signal, and the signal mask not being restored afterwards |
 | `t_i2c_endian` | the `read`/`write` bitfield view of `dir` matching the transfer constants |
 
 `support/` holds `LD_PRELOAD` interposers used to reach failure paths the
