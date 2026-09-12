@@ -29,7 +29,7 @@
 NAME       = bitters
 # Keep in step with the release tag: `make version` prints this, and it
 # is what bitters.pc and the soname carry.
-VERSION    = 1.1.0
+VERSION    = 1.1.1
 SOMAJOR    = 1
 
 PREFIX    ?= /usr/local

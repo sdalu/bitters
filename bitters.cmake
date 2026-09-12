@@ -46,7 +46,7 @@
 # This file is for vendored trees. Installing bitters gives you a
 # pkg-config file instead; see the README.
 
-set(BITTERS_VERSION       1.1.0)
+set(BITTERS_VERSION       1.1.1)
 
 set(BITTERS_INCLUDE_DIR   ${CMAKE_CURRENT_LIST_DIR}/include)
 
