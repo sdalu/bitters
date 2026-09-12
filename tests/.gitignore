@@ -6,6 +6,7 @@ t_errno
 t_i2c_endian
 t_init_repeat
 t_irq_delivery
+t_irq_wait
 t_irq_sibling_reconfig
 t_lock_stress
 t_pins_dangling

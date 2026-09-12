@@ -30,6 +30,7 @@ What each test pins down
 | `t_init_repeat` | a second `bitters_gpio_init()` aborting on its own signal handler (built **without** `-DNDEBUG` on purpose; also checks a genuine third-party `SIGUSR1` handler is still detected) |
 | `t_irq_sibling_reconfig` | IRQ thread blocking in `read()` under `irq_lock` after a callback reconfigures a sibling pin — exit 42 means it hung |
 | `t_starvation` | a busy low-numbered line starving a higher-numbered one |
+| `t_irq_wait` | the documented poll-it-yourself path — a pin with no callback registered must keep blocking `irq_wait()` semantics, which the `O_NONBLOCK` toggle for callback pins must not leak into |
 | `t_irq_delivery` | plain edge delivery, 6/6 — the regression guard for all of the above |
 | `t_pins_dangling` | `pin_disable()` leaving a released pin in the controller table (white-box: includes `../src/gpio.c`) |
 | `t_race_after` | using a pin after two threads raced on it — must not crash, invariant must hold |

@@ -24,7 +24,7 @@ SELFCONTAINED = t_pins_dangling
 PLAIN = t_i2c_endian
 GPIO  = t_init_repeat t_irq_delivery t_irq_sibling_reconfig t_pins_dangling \
         t_race_after t_race_enable t_lock_stress t_errno t_c8 t_starvation \
-        t_soak t_allocfail t_cross_teardown
+        t_soak t_allocfail t_cross_teardown t_irq_wait
 SUPPORT = support/close_clobber.so support/fcntl_fail.so support/alloc_fail.so
 
 all: $(PLAIN) $(GPIO) $(SUPPORT)
