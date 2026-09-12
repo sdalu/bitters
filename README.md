@@ -111,6 +111,22 @@ it: only the `.c` files need `-D_GNU_SOURCE`, and the public headers
 compile without any special flag. To build an application, use
 `pkg-config` (below).
 
+For CMake there is `bitters.cmake`, which needs no `make` at all:
+
+```cmake
+include(${CMAKE_CURRENT_SOURCE_DIR}/3rd/bitters/bitters.cmake)
+add_library(bitters INTERFACE)
+target_include_directories(bitters INTERFACE ${BITTERS_INCLUDE_DIR})
+target_compile_definitions(bitters INTERFACE _GNU_SOURCE)
+target_sources(bitters INTERFACE ${BITTERS_SOURCES})
+```
+
+It sets variables rather than defining a target, so you can compile
+bitters differently for different targets -- giving only your threaded
+program `BITTERS_WITH_THREADS`, say -- and leave out a subsystem you do
+not use, through `BITTERS_SOURCES_CORE`, `_GPIO`, `_SPI`, `_I2C` and
+`_DELAY`. It also sets `BITTERS_VERSION`.
+
 The tree builds warning-free with `-Wall -Wextra`; `make WERROR=yes`
 turns warnings into errors, which is what CI should use. Those warning
 flags are applied by the Makefile itself rather than through `CFLAGS`,

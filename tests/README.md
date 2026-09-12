@@ -45,6 +45,7 @@ What each test pins down
 | `t_spi_args` | SPI argument validation — the `SPI_IOC_MESSAGE` 14-bit count bound (511 passes, 512 does not), the 32-bit `len` field, `set_speed`/`set_wordsize`, and the enable/truncation error paths. Touches no SPI bus |
 | `t_i2c_args` | I2C argument validation — `I2C_RDWR_IOCTL_MAX_MSGS`, the 16-bit `len` field, the direction switch (neither/both rejected), and the enable/truncation error paths. Touches no I2C bus |
 | `t_delay` | a delay being cut short by an ordinary signal, and the signal mask not being restored afterwards |
+| `check-cmake.sh` | `bitters.cmake` drifting from the Makefile: it repeats the source list and the version, and two copies drift |
 | `t_i2c_endian` | the `read`/`write` bitfield view of `dir` matching the transfer constants |
 
 `support/` holds `LD_PRELOAD` interposers used to reach failure paths the

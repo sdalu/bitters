@@ -67,6 +67,7 @@ t_pins_dangling: t_pins_dangling.c $(GPIOSRC)
 # The mockup chips are discovered in the recipe: $(shell) is GNU-only.
 # t_cross_teardown needs a second chip and reports 77 (skip) without one.
 check: $(PLAIN)
+	@sh ./check-cmake.sh
 	@BITTERS_SILENCE_WARNING=1 ./t_i2c_endian
 	@BITTERS_SILENCE_WARNING=1 ./t_delay
 	@BITTERS_SILENCE_WARNING=1 ./t_spi_args
