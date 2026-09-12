@@ -24,7 +24,7 @@ SELFCONTAINED = t_pins_dangling
 PLAIN = t_i2c_endian
 GPIO  = t_init_repeat t_irq_delivery t_irq_sibling_reconfig t_pins_dangling \
         t_race_after t_race_enable t_lock_stress t_errno t_c8 t_starvation \
-        t_soak t_allocfail
+        t_soak t_allocfail t_cross_teardown
 SUPPORT = support/close_clobber.so support/fcntl_fail.so support/alloc_fail.so
 
 all: $(PLAIN) $(GPIO) $(SUPPORT)
@@ -45,18 +45,25 @@ support/%.so: support/%.c
 	$(CC) $(CFLAGS) -shared -fPIC -o $@ $< -ldl
 
 # --- running ---------------------------------------------------------
-CHIP ?= $(shell gpiodetect 2>/dev/null | sed -n 's/^\(gpiochip[0-9]*\) \[gpio-mockup.*/\1/p')
+# First and second gpio-mockup chips. t_cross_teardown needs two; it
+# reports 77 (skip) when CHIP2 is absent.
+MOCKUPS := $(shell gpiodetect 2>/dev/null | sed -n 's/^\(gpiochip[0-9]*\) \[gpio-mockup.*/\1/p')
+CHIP    ?= $(word 1,$(MOCKUPS))
+CHIP2   ?= $(word 2,$(MOCKUPS))
 
 check: t_i2c_endian
 	./t_i2c_endian
 
 check-gpio: all
-	@test -n "$(CHIP)" || { echo "no gpio-mockup chip: modprobe gpio-mockup gpio_mockup_ranges=-1,8"; exit 1; }
-	@echo "using virtual chip: $(CHIP)"
+	@test -n "$(CHIP)" || { echo "no gpio-mockup chip: modprobe gpio-mockup gpio_mockup_ranges=-1,8,-1,8"; exit 1; }
+	@echo "using virtual chip: $(CHIP)$(if $(CHIP2), and $(CHIP2),  (only one: two-chip tests will skip))"
 	@fail=0; for t in $(GPIO); do \
 	    printf '  %-26s ' $$t; \
-	    if BH_CHIP=$(CHIP) BITTERS_SILENCE_WARNING=1 timeout 120 ./$$t >/dev/null 2>&1; \
-	    then echo PASS; else echo "FAIL (exit $$?)"; fail=1; fi; \
+	    BH_CHIP=$(CHIP) BH_CHIP2=$(CHIP2) BITTERS_SILENCE_WARNING=1 \
+	        timeout 120 ./$$t >/dev/null 2>&1; rc=$$?; \
+	    if [ $$rc -eq 0 ];  then echo PASS; \
+	    elif [ $$rc -eq 77 ]; then echo "SKIP (needs a second mockup chip)"; \
+	    else echo "FAIL (exit $$rc)"; fail=1; fi; \
 	done; exit $$fail
 
 # i2c bitfield view on other ABIs, by inspecting emitted initializer bytes.

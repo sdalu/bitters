@@ -9,7 +9,7 @@
 #include "bitters.h"
 #include "bitters/gpio.h"
 static int fdcount(void){
-    DIR *d = opendir("/proc/self/fd"); struct dirent *e; int n=0; char p[256],t[256];
+    DIR *d = opendir("/proc/self/fd"); struct dirent *e; int n=0; char p[300], t[256];
     while ((e = readdir(d))) { snprintf(p,sizeof p,"/proc/self/fd/%s",e->d_name);
         ssize_t r=readlink(p,t,sizeof t-1); if(r<0)continue; t[r]=0;
         if (strstr(t,"/dev/gpiochip")||strstr(t,"gpio-line")||strstr(t,"gpio-event")) n++; }

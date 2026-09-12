@@ -6,6 +6,7 @@
 #include "bitters/gpio.h"
 static void foreign(int s) { (void)s; }
 int main(int argc, char **argv) {
+    (void)argv;
     int third_party = (argc > 1);
     if (third_party) {
         struct sigaction sa = { .sa_handler = foreign };

@@ -157,6 +157,13 @@ static pthread_mutex_t bitters_gpio_pins_lock = PTHREAD_MUTEX_INITIALIZER;
 
 /*== Internal functions ================================================*/
 
+#if defined(BITTERS_WITH_GPIO_IRQ) && defined(BITTERS_WITH_THREADS)
+/* Set inside every interrupt processing thread. Such a thread must never
+ * join another one: the target may be tearing down *our* controller from
+ * its own callback, and the two would join each other for ever */
+static __thread int bitters_gpio_in_irq_thread = 0;
+#endif
+
 static void
 _bitters_gpio_sigirq(int a) {
     /* Nothing */
@@ -185,22 +192,33 @@ _bitters_gpio_ctrl_destroy(struct bitters_gpio_ctrl *ctrl)
      * caller (under the list lock), so no other thread can reach it */
 
 #if defined(BITTERS_WITH_GPIO_IRQ) && defined(BITTERS_WITH_THREADS)
+    /* Snapshot the thread id first: once shutdown is set to self-release
+     * the thread may free the controller at any moment, so ctrl must not
+     * be touched afterwards */
+    pthread_t thread   = ctrl->irq_thread;
+    int       deferred = bitters_gpio_in_irq_thread;
+
     /* Request irq processing thread shutdown */
-    int self = pthread_equal(pthread_self(), ctrl->irq_thread);
     pthread_mutex_lock(&ctrl->irq_lock);
-    ctrl->shutdown = self ? 2 : 1;
+    ctrl->shutdown = deferred ? 2 : 1;
     pthread_mutex_unlock(&ctrl->irq_lock);
 
-    if (self) {
-	/* Destroying from within an irq callback: the thread can't
-	 * join itself, it will notice the request on its way out
-	 * and release the controller */
-	pthread_detach(ctrl->irq_thread);
+    if (deferred) {
+	/* Called from an irq callback. The thread cannot join itself,
+	 * and joining a different irq thread is worse still: that one
+	 * may be tearing down our own controller from its callback, so
+	 * the two would join each other and neither controller would
+	 * ever be released. Hand the teardown to the dying thread; it
+	 * releases the controller on its way out.
+	 * Signal before detaching -- while the thread is still joinable
+	 * its id stays valid even if it has already exited. */
+	pthread_kill(thread, BITTERS_SIGIRQ);
+	pthread_detach(thread);
 	return;
     }
 
-    pthread_kill(ctrl->irq_thread, BITTERS_SIGIRQ);
-    pthread_join(ctrl->irq_thread, NULL);
+    pthread_kill(thread, BITTERS_SIGIRQ);
+    pthread_join(thread, NULL);
 #endif
 
     _bitters_gpio_ctrl_free(ctrl);
@@ -249,6 +267,7 @@ _bitters_gpio_ctrl_release(struct bitters_gpio_ctrl *ctrl)
 static void *
 bitters_gpio_irq_processing(void *args) {
     struct bitters_gpio_ctrl *ctrl = args;
+    bitters_gpio_in_irq_thread = 1;
     sigset_t mask;
     sigfillset(&mask);
     sigdelset(&mask, BITTERS_SIGIRQ);

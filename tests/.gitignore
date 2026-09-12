@@ -1,6 +1,7 @@
 # built test binaries
 t_allocfail
 t_c8
+t_cross_teardown
 t_errno
 t_i2c_endian
 t_init_repeat

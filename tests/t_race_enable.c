@@ -26,7 +26,7 @@ static void *racer(void *x) {
 }
 static void count_fds(int *chip, int *line) {
     DIR *d = opendir("/proc/self/fd"); struct dirent *e;
-    char p[256], t[256]; *chip = 0; *line = 0;
+    char p[300], t[256]; *chip = 0; *line = 0;
     while ((e = readdir(d))) {
         snprintf(p, sizeof p, "/proc/self/fd/%s", e->d_name);
         ssize_t n = readlink(p, t, sizeof t - 1); if (n < 0) continue; t[n] = 0;

@@ -9,7 +9,7 @@ Running
 -------
 
     make check                       # no privilege needed
-    sudo modprobe gpio-mockup gpio_mockup_ranges=-1,8
+    sudo modprobe gpio-mockup gpio_mockup_ranges=-1,8,-1,8
     sudo make check-gpio             # GPIO tests, on a *virtual* chip
     sudo rmmod gpio-mockup
     make endian                      # i2c bitfield on other-endian ABIs
@@ -34,6 +34,7 @@ What each test pins down
 | `t_pins_dangling` | `pin_disable()` leaving a released pin in the controller table (white-box: includes `../src/gpio.c`) |
 | `t_race_after` | using a pin after two threads raced on it — must not crash, invariant must hold |
 | `t_race_enable` | controller/descriptor leak after concurrent `pin_enable()` on one pin |
+| `t_cross_teardown` | two controllers released from each other's callback — their IRQ threads joining each other. Needs a **second** mockup chip (`gpio_mockup_ranges=-1,8,-1,8`); reports SKIP without one. Detects the hang by counting leaked `/dev/gpiochip` descriptors, because the main thread never blocks |
 | `t_lock_stress` | deadlock between the pins lock and controller teardown (60 teardowns with callbacks reconfiguring siblings); exit 43 means deadlock |
 | `t_c8` | registering an IRQ callback when the non-blocking toggle cannot be applied — must refuse, not silently install |
 | `t_errno` | `errno` surviving the cleanup in `_bitters_gpio_ctrl_create()` |
