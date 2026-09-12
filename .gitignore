@@ -1,4 +1,10 @@
-
 *~
-
 a.out
+*.o
+*.lo
+*.a
+*.so
+*.so.*
+bitters.pc
+doc/html/
+doc/latex/

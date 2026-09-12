@@ -57,9 +57,35 @@ you'd find in microcontroller SDKs, providing you with:
 Build and configuration
 =======================
 
+### Building
+
+```sh
+make                            # static + shared library
+make check                      # tests that need no privilege
+sudo make check-gpio            # GPIO tests, see tests/README.md
+sudo make install PREFIX=/usr
+```
+
+Feature selection is done on the `make` command line, and `make features`
+reports what a given combination produces:
+
+```sh
+make THREADS=yes GPIO_IRQ=yes ASSERT=no LOG=no
+```
+
+**The feature flags change the layout of `bitters_gpio_pin_t`, so an
+application must be compiled with the same set as the library.** The
+installed `bitters.pc` carries them, so building against
+`pkg-config --cflags --libs bitters` keeps the two in step:
+
+```sh
+cc -o app app.c $(pkg-config --cflags --libs bitters)
+```
+
 ### Basic Compilation
 
-Compile with `-D_GNU_SOURCE` to enable required GNU extensions.
+If you compile the sources directly instead, compile with `-D_GNU_SOURCE`
+to enable required GNU extensions.
 
 ### Thread Support
 
