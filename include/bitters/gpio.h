@@ -210,6 +210,15 @@ int bitters_gpio_init(void);
 /**
  * Enable the pin according to the selected configuration.
  *
+ * @note Thread-safe. Pin state transitions -- enable, disable and
+ *       interrupt callback registration -- are serialized internally, so
+ *       several threads may act on the same pin; the loser of a
+ *       concurrent enable simply observes the pin as already enabled.
+ *       Calling back into this API from an interrupt callback is
+ *       supported, including releasing the last pin of a controller.
+ *       The pin structure itself must not be re-initialized or freed
+ *       while another thread is still using it.
+ *
  * @param pin 		pin identification
  * @param cfg		pin configuration
  * @return < 0 in case of error (-errno)

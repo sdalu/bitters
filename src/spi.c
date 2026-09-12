@@ -56,7 +56,7 @@
 static void
 _bitters_spi_warn_about_bufsize_config(void) {
     static int once = 0;
-    if (once++                                                  ||
+    if (__atomic_exchange_n(&once, 1, __ATOMIC_RELAXED) ||
 	(getenv("BITTERS_SILENCE_WARNING"            ) != NULL) ||
 	(getenv("BITTERS_SILENCE_SPI_BUFSIZE_WARNING") != NULL)) return;
 

@@ -91,13 +91,6 @@
 
 /*== Macros ============================================================*/
 
-#define BITTERS_GPIO_ENSURE_ASSOCIATED_PIN(pin)				\
-    do {								\
-        int rc = _bitters_gpio_pin_ensure_associated(pin);		\
-	if (rc < 0)							\
-	    return rc;							\
-    } while(0)
-
 #define BITTERS_GPIO_ENSURE_INTERRUPT_PIN(pin)				\
     do {								\
 	if (! (pin->flags & GPIO_PIN_FLAG_INTERRUPT)) {			\
@@ -119,7 +112,8 @@ struct bitters_gpio_ctrl {
     int   shutdown;			// irq thread shutdown request
 					//  (1: join, 2: self-release)
     int   lines;			// controller pin count
-    struct pollfd *fds;
+    struct pollfd *fds;			// shared table, under irq_lock
+    struct pollfd *pfds;		// irq thread's private snapshot
     bitters_gpio_pin_t **pins;
 #endif
 };
@@ -140,9 +134,22 @@ static pthread_mutex_t bitters_gpio_ctrls_lock = PTHREAD_MUTEX_INITIALIZER;
     pthread_mutex_lock(&bitters_gpio_ctrls_lock)
 #define BITTERS_GPIO_CTRLS_UNLOCK()				\
     pthread_mutex_unlock(&bitters_gpio_ctrls_lock)
+
+/* Serializes per-pin state transitions: pin->ctrl and pin->fd form a
+ * test-and-set pair that enable/disable must apply atomically.
+ * Lock order is  pins -> ctrls -> irq,  and the pins lock is never held
+ * across controller teardown, which joins the irq processing thread --
+ * a thread that may be inside a callback calling back into this API */
+static pthread_mutex_t bitters_gpio_pins_lock = PTHREAD_MUTEX_INITIALIZER;
+#define BITTERS_GPIO_PINS_LOCK()				\
+    pthread_mutex_lock(&bitters_gpio_pins_lock)
+#define BITTERS_GPIO_PINS_UNLOCK()				\
+    pthread_mutex_unlock(&bitters_gpio_pins_lock)
 #else
 #define BITTERS_GPIO_CTRLS_LOCK()
 #define BITTERS_GPIO_CTRLS_UNLOCK()
+#define BITTERS_GPIO_PINS_LOCK()
+#define BITTERS_GPIO_PINS_UNLOCK()
 #endif
 
 
@@ -162,6 +169,7 @@ _bitters_gpio_ctrl_free(struct bitters_gpio_ctrl *ctrl)
 #if defined(BITTERS_WITH_GPIO_IRQ) && defined(BITTERS_WITH_THREADS)
     pthread_mutex_destroy(&ctrl->irq_lock);
     free(ctrl->fds);
+    free(ctrl->pfds);
     free(ctrl->pins);
 #endif
     close(ctrl->fd);
@@ -199,8 +207,12 @@ _bitters_gpio_ctrl_destroy(struct bitters_gpio_ctrl *ctrl)
 }
 
 
-static int
-_bitters_gpio_pin_disassociate_ctrl(bitters_gpio_pin_t *pin)
+/* Drop this pin's reference on its controller.
+ * Returns the controller when this was the last reference -- already
+ * unlinked from the list, so unreachable by other threads -- for the
+ * caller to destroy once it holds no lock at all; NULL otherwise. */
+static struct bitters_gpio_ctrl *
+_bitters_gpio_pin_release_ctrl(bitters_gpio_pin_t *pin)
 {
     struct bitters_gpio_ctrl *ctrl = pin->ctrl;
     int last;
@@ -212,20 +224,25 @@ _bitters_gpio_pin_disassociate_ctrl(bitters_gpio_pin_t *pin)
     last = (ctrl->refcount == 0);
     if (last) {
 	/* Unlink while holding the lock, so no other thread can find
-	 * and re-reference the controller; the teardown itself happens
-	 * unlocked, as it may join the irq thread (which could be busy
-	 * in a callback that takes this very lock) */
+	 * and re-reference the controller */
 	LIST_REMOVE(ctrl, entries);
     }
     BITTERS_GPIO_CTRLS_UNLOCK();
 
-    /* Last pin released: destroy the controller */
-    if (last) {
-	BITTERS_GPIO_LOG("releasing controller %s", ctrl->name);
-	_bitters_gpio_ctrl_destroy(ctrl);
-    }
+    return last ? ctrl : NULL;
+}
 
-    return 0;
+
+/* Destroy a controller handed back by _bitters_gpio_pin_release_ctrl().
+ * Must be called with no bitters lock held: it joins the irq processing
+ * thread, which may be inside a callback that calls into this API. */
+static void
+_bitters_gpio_ctrl_release(struct bitters_gpio_ctrl *ctrl)
+{
+    if (ctrl == NULL)
+	return;
+    BITTERS_GPIO_LOG("releasing controller %s", ctrl->name);
+    _bitters_gpio_ctrl_destroy(ctrl);
 }
 
 #if defined(BITTERS_WITH_GPIO_IRQ) && defined(BITTERS_WITH_THREADS)
@@ -246,13 +263,17 @@ bitters_gpio_irq_processing(void *args) {
     int shutdown = 0;
     while (1) {
 	/* Check for shutdown request (controller release) */
+	/* Snapshot the descriptor table under the lock: ppoll() must not
+	 * read ctrl->fds while a registration or a pin disable rewrites
+	 * it, and revents then belongs to this thread alone */
 	pthread_mutex_lock(&ctrl->irq_lock);
 	shutdown = ctrl->shutdown;
+	memcpy(ctrl->pfds, ctrl->fds, ctrl->lines * sizeof(struct pollfd));
 	pthread_mutex_unlock(&ctrl->irq_lock);
 	if (shutdown)
 	    break;
 
-	int rc = ppoll(ctrl->fds, ctrl->lines, NULL, &mask);
+	int rc = ppoll(ctrl->pfds, ctrl->lines, NULL, &mask);
 	/* Check if we got interrupted to perform a reload of the
 	 * file descriptors table
 	 */
@@ -273,27 +294,38 @@ bitters_gpio_irq_processing(void *args) {
 	 */
 	pthread_mutex_lock(&ctrl->irq_lock);
 	for (int i = 0 ; i < ctrl->lines ; i++) {
-	    if (ctrl->fds[i].revents) {
-		bitters_gpio_pin_t *pin = ctrl->pins[i];
-		/* Pin may have been unregistered while an event
-		 * was pending */
-		if (pin == NULL)
-		    continue;
-		bitters_gpio_irq_cb_t cb      = pin->irq_cb;
-		void                 *cb_args = pin->irq_cb_args;
-		// Consume event
-		BITTERS_GPIO_LOG("got interrupt on pin %d", pin->id);
-		if (bitters_gpio_irq_wait(pin) < 0)
-		    continue;
-		// Perform callback (unless unregistered meanwhile)
-		if (cb != NULL) {
-		    /* Don't hold the lock during the callback: it may
-		     * legitimately re-register or disable the pin */
-		    pthread_mutex_unlock(&ctrl->irq_lock);
-		    cb(pin, cb_args);
-		    pthread_mutex_lock(&ctrl->irq_lock);
-		}
-	    }
+	    if (! ctrl->pfds[i].revents)
+		continue;
+	    bitters_gpio_pin_t *pin = ctrl->pins[i];
+	    /* Pin released while an event was pending */
+	    if (pin == NULL)
+		continue;
+	    bitters_gpio_irq_cb_t cb      = pin->irq_cb;
+	    void                 *cb_args = pin->irq_cb_args;
+	    /* Service a pin only while its registration is still the one
+	     * we polled. Another thread -- or a callback run earlier in
+	     * this very scan -- may have unregistered it (which puts the
+	     * line back in blocking mode) or re-enabled it onto a
+	     * different descriptor. Reading in either case would consume
+	     * an event nobody asked for, or block on an empty line while
+	     * holding irq_lock. Skipping leaves the event in the kernel
+	     * fifo for whoever polls it next, so nothing is lost.
+	     * Re-validating per entry rather than abandoning the scan is
+	     * what keeps a busy low-numbered line from starving the
+	     * others. */
+	    if ((cb == NULL)                     ||
+		(ctrl->fds[i].fd  != pin->fd)    ||
+		(ctrl->pfds[i].fd != pin->fd))
+		continue;
+	    // Consume event
+	    BITTERS_GPIO_LOG("got interrupt on pin %d", pin->id);
+	    if (bitters_gpio_irq_wait(pin) < 0)
+		continue;
+	    /* Don't hold the lock during the callback: it may
+	     * legitimately re-register or disable the pin */
+	    pthread_mutex_unlock(&ctrl->irq_lock);
+	    cb(pin, cb_args);
+	    pthread_mutex_lock(&ctrl->irq_lock);
 	}
 	pthread_mutex_unlock(&ctrl->irq_lock);
     };
@@ -312,6 +344,7 @@ _bitters_gpio_ctrl_create(const char *devname)
 {
     int                       rc      = -EINVAL;
     int                       fd      = -1;
+    int                       errno_saved;
     char                     *name    = NULL;
     char                     *devpath = NULL;
     struct bitters_gpio_ctrl *ctrl    = NULL;
@@ -361,8 +394,9 @@ _bitters_gpio_ctrl_create(const char *devname)
     }
     ctrl->lines = cinfo.lines;
     ctrl->fds   = calloc(cinfo.lines, sizeof(struct pollfd));
+    ctrl->pfds  = calloc(cinfo.lines, sizeof(struct pollfd));
     ctrl->pins  = calloc(cinfo.lines, sizeof(bitters_gpio_pin_t *));
-    if ((ctrl->fds == NULL) || (ctrl->pins == NULL)) {
+    if ((ctrl->fds == NULL) || (ctrl->pfds == NULL) || (ctrl->pins == NULL)) {
 	BITTERS_GPIO_LOG("failed to allocate memory for interrupt polling");
 	goto failed;
     }
@@ -402,7 +436,11 @@ _bitters_gpio_ctrl_create(const char *devname)
     return ctrl;
 
     // Deal with failures
+    //   The caller reports the failure as -errno, and neither close()
+    //   nor free() is required to leave errno untouched, so the cause is
+    //   saved across the cleanup
  failed:
+    errno_saved = errno;
     if (fd >= 0)
 	close(fd);
     free(devpath);
@@ -410,10 +448,12 @@ _bitters_gpio_ctrl_create(const char *devname)
 #if defined(BITTERS_WITH_GPIO_IRQ) && defined(BITTERS_WITH_THREADS)
     if (ctrl != NULL) {
 	free(ctrl->fds);
+	free(ctrl->pfds);
 	free(ctrl->pins);
     }
 #endif
     free(ctrl);
+    errno = errno_saved;
     return NULL;
 }
 
@@ -479,7 +519,7 @@ _bitters_gpio_pin_ensure_associated(bitters_gpio_pin_t *pin)
 static void
 _bitters_gpio_warn_about_hardware_config(void) {
     static int once = 0;
-    if (once++                                          ||
+    if (__atomic_exchange_n(&once, 1, __ATOMIC_RELAXED) ||
 	(getenv("BITTERS_SILENCE_WARNING"    ) != NULL) ||
 	(getenv("BITTERS_SILENCE_RPI_WARNING") != NULL)) return;
 
@@ -518,6 +558,12 @@ bitters_gpio_init(void)
 		    strsignal(BITTERS_SIGIRQ));
 	return -errno;
     }
+    /* Our own handler, left by an earlier init: already initialized.
+     * Without this, a second bitters_gpio_init() -- directly, or after
+     * bitters_init() -- mistakes our own handler for a third-party one
+     * and trips the assert below */
+    if (oldsigact.sa_handler == _bitters_gpio_sigirq)
+	goto initialized;
     /* Assert to fail hard in debug builds; NDEBUG builds fall through
      * to the graceful recovery below */
     BITTERS_ASSERT((oldsigact.sa_handler   == NULL) &&
@@ -539,6 +585,7 @@ bitters_gpio_init(void)
 	"\n", signame, signame);
 	return -EBUSY;
     }
+ initialized:
 #endif
 
     BITTERS_GPIO_WARN_ABOUT_HARDWARE_CONFIG();
@@ -551,13 +598,25 @@ int
 bitters_gpio_pin_enable(bitters_gpio_pin_t *pin, bitters_gpio_cfg_t *cfg)
 {
     int rc;
+    struct bitters_gpio_ctrl *dying = NULL;
 
     BITTERS_GPIO_ASSERT_PIN(pin);
-    BITTERS_GPIO_ENSURE_ASSOCIATED_PIN(pin);
+
+    /* pin->ctrl and pin->fd are read and written as one transition */
+    BITTERS_GPIO_PINS_LOCK();
+
+    int associated_here = (pin->ctrl == NULL);
+    rc = _bitters_gpio_pin_ensure_associated(pin);
+    if (rc < 0) {
+	BITTERS_GPIO_PINS_UNLOCK();
+	return rc;
+    }
 
     // Already enabled ?
-    if (pin->fd >= 0)
+    if (pin->fd >= 0) {
+	BITTERS_GPIO_PINS_UNLOCK();
 	return 0;
+    }
 
     // Build flags
     uint64_t flags = 0;
@@ -683,6 +742,7 @@ bitters_gpio_pin_enable(bitters_gpio_pin_t *pin, bitters_gpio_cfg_t *cfg)
     // Job's done
     BITTERS_GPIO_LOG("pin %d (%s) enabled (fd=%d)",
 		     pin->id, cfg->label, pin->fd);
+    BITTERS_GPIO_PINS_UNLOCK();
     return 0;
 
     // Deal with failures
@@ -691,7 +751,10 @@ bitters_gpio_pin_enable(bitters_gpio_pin_t *pin, bitters_gpio_cfg_t *cfg)
     //   controller reference (device fd, irq thread) could otherwise
     //   never be released
  failed:
-    _bitters_gpio_pin_disassociate_ctrl(pin);
+    if (associated_here)
+	dying = _bitters_gpio_pin_release_ctrl(pin);
+    BITTERS_GPIO_PINS_UNLOCK();
+    _bitters_gpio_ctrl_release(dying);
     return rc;
 }
 
@@ -700,25 +763,38 @@ bitters_gpio_pin_enable(bitters_gpio_pin_t *pin, bitters_gpio_cfg_t *cfg)
 int
 bitters_gpio_pin_disable(bitters_gpio_pin_t *pin)
 {
+    struct bitters_gpio_ctrl *dying = NULL;
+
     BITTERS_GPIO_ASSERT_PIN(pin);
 
+    BITTERS_GPIO_PINS_LOCK();
+
     // Already disabled (or never enabled) ?
-    if (pin->fd < 0)
+    if (pin->fd < 0) {
+	BITTERS_GPIO_PINS_UNLOCK();
 	return 0;
+    }
 
 #if defined(BITTERS_WITH_GPIO_IRQ) && defined(BITTERS_WITH_THREADS)
     /* Remove pin from irq callback processing before closing its
      * descriptor, otherwise the processing thread would keep polling
      * a stale descriptor (POLLNVAL) and spin invoking the callback */
-    if ((pin->ctrl != NULL) && (pin->irq_cb != NULL)) {
+    /* Not conditioned on pin->irq_cb: bitters_gpio_irq_callback(pin, NULL)
+     * clears the callback but leaves the pin registered in the controller
+     * table, so testing irq_cb here would leave a pointer to the -- now
+     * released, possibly freed -- pin behind */
+    if (pin->ctrl != NULL) {
+	int registered;
 	pthread_mutex_lock(&pin->ctrl->irq_lock);
+	registered       = (pin->ctrl->pins[pin->id] != NULL);
 	pin->irq_cb      = NULL;
 	pin->irq_cb_args = NULL;
 	pin->ctrl->fds[pin->id].fd = -1;
 	pin->ctrl->pins[pin->id]   = NULL;
 	pthread_mutex_unlock(&pin->ctrl->irq_lock);
 	/* Notify irq processing thread of changes */
-	pthread_kill(pin->ctrl->irq_thread, BITTERS_SIGIRQ);
+	if (registered)
+	    pthread_kill(pin->ctrl->irq_thread, BITTERS_SIGIRQ);
     }
 #endif
 
@@ -741,7 +817,12 @@ bitters_gpio_pin_disable(bitters_gpio_pin_t *pin)
     // Release the controller reference (the controller itself is
     // destroyed when its last pin is released)
     if (pin->ctrl != NULL)
-	_bitters_gpio_pin_disassociate_ctrl(pin);
+	dying = _bitters_gpio_pin_release_ctrl(pin);
+
+    BITTERS_GPIO_PINS_UNLOCK();
+
+    /* Teardown happens with no lock held: it joins the irq thread */
+    _bitters_gpio_ctrl_release(dying);
 
     // Job's done (rc reports a close() failure, the pin is disabled)
     return rc;
@@ -840,6 +921,41 @@ bitters_gpio_irq_callback(bitters_gpio_pin_t *pin,
     BITTERS_GPIO_ENSURE_INTERRUPT_PIN(pin);
 
 #if defined(BITTERS_WITH_GPIO_IRQ) && defined(BITTERS_WITH_THREADS)
+    BITTERS_GPIO_PINS_LOCK();
+
+    /* Re-check under the lock: the interrupt flag was tested on entry
+     * without it, so the pin may have been disabled and re-enabled with
+     * a different configuration in between */
+    if ((! (pin->flags & GPIO_PIN_FLAG_INTERRUPT)) || (pin->ctrl == NULL)) {
+	BITTERS_GPIO_PINS_UNLOCK();
+	return -EINVAL;
+    }
+
+    /* The dispatch loop reads the line while holding irq_lock, so that
+     * read must never block: a descriptor that polls ready without
+     * readable data would otherwise pin the lock -- and with it every
+     * pin operation -- for as long as no edge arrives. A pin driven by
+     * bitters_gpio_irq_wait() keeps blocking semantics, as documented. */
+    int fl = fcntl(pin->fd, F_GETFL, 0);
+    if ((fl < 0) ||
+	(fcntl(pin->fd, F_SETFL, (cb != NULL) ? (fl |  O_NONBLOCK)
+					      : (fl & ~O_NONBLOCK)) < 0)) {
+	/* Registering a callback on a descriptor left blocking would put
+	 * the very hang above back in place, so refuse rather than
+	 * degrade. Unregistering only restores blocking mode: failing
+	 * that is harmless, and refusing would be worse -- it would
+	 * leave the callback installed */
+	if (cb != NULL) {
+	    int err = -errno;
+	    BITTERS_GPIO_LOG("failed to set pin %d non-blocking (%s)",
+			     pin->id, strerror(errno));
+	    BITTERS_GPIO_PINS_UNLOCK();
+	    return err;
+	}
+	BITTERS_GPIO_LOG("failed to restore blocking mode on pin %d (%s)",
+			 pin->id, strerror(errno));
+    }
+
     pthread_mutex_lock(&pin->ctrl->irq_lock);
 
     /* Save callback information */
@@ -858,6 +974,9 @@ bitters_gpio_irq_callback(bitters_gpio_pin_t *pin,
 
     /* Notify irq processing thread of changes */
     int rc = pthread_kill(pin->ctrl->irq_thread, BITTERS_SIGIRQ);
+
+    BITTERS_GPIO_PINS_UNLOCK();
+
     if (rc != 0) {
 	/* pthread_* return a positive error number, and don't set errno */
 	return -rc;
