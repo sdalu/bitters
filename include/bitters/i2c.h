@@ -79,6 +79,11 @@ struct bitters_i2c_transfer {
       uint8_t  dir;		/**< direction (read or write)	*/
       struct {
 #if   defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+	/* A big-endian ABI fills a storage unit from the most significant
+	 * bit, so the two flags must be pushed down by six padding bits to
+	 * land on the same bits as BITTERS_I2C_TRANSFER_{READ,WRITE};
+	 * swapping the declaration order alone is not enough */
+	uint8_t      :6;	/**< padding			*/
 	uint8_t read :1;	/**< read direction		*/
 	uint8_t write:1;	/**< write direction		*/
 #elif defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
