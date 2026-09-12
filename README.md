@@ -94,19 +94,18 @@ reports what a given combination produces:
 make THREADS=yes GPIO_IRQ=yes ASSERT=no LOG=no
 ```
 
-**The feature flags change the layout of `bitters_gpio_pin_t`, so an
-application must be compiled with the same set as the library.** The
-installed `bitters.pc` carries them, so building against
-`pkg-config --cflags --libs bitters` keeps the two in step:
+The feature flags are build-time only. The headers declare the whole API
+whatever they are set to, and a function whose feature was not compiled
+in returns `-ENOSYS` rather than going missing, so an application needs
+no flag to match the library it links against:
 
 ```sh
 cc -o app app.c $(pkg-config --cflags --libs bitters)
 ```
 
-`bitters.pc` exports the feature flags, because the headers are
-conditional on them, but not `-D_GNU_SOURCE`: that is needed to compile
-bitters itself, not to use it, and forcing it on your sources would be
-presumptuous.
+`bitters.pc` therefore exports nothing but the include path and the
+libraries to link. In particular it does not export `-D_GNU_SOURCE`:
+that is needed to compile bitters, not to use it.
 
 ### Basic Compilation
 

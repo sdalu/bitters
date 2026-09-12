@@ -21,11 +21,10 @@
 # The tree builds warning-free with -Wall -Wextra; `make WERROR=yes`
 # turns warnings into errors (use it in CI).
 #
-# NOTE: the feature flags change the layout of bitters_gpio_pin_t, so an
-# application MUST be compiled with the same set as the library. The
-# generated bitters.pc carries them in Cflags for exactly that reason;
-# build your application with `pkg-config --cflags bitters` and the two
-# cannot drift apart.
+# The feature flags are build-time only. The public headers declare the
+# whole API whatever they are set to, and a function whose feature was
+# not compiled in returns -ENOSYS rather than going missing, so a
+# consumer needs no flag to match the library it links against.
 
 NAME      := bitters
 VERSION   := 0.1.0
@@ -78,15 +77,11 @@ ifeq ($(LOG),yes)
               -DBITTERS_I2C_WITH_LOG
 endif
 
-# What a consumer of the installed library needs. The feature flags are
-# in here because the headers are conditional on them (gpio.h only
-# declares bitters_gpio_irq_callback() under BITTERS_WITH_THREADS).
-# _GNU_SOURCE is deliberately NOT: the public headers compile without it,
-# and exporting it would force it on the consumer's own sources.
-PUBLIC_CPPFLAGS := $(FEATURES)
-
-# What building bitters itself needs; src/gpio.c refuses without _GNU_SOURCE.
-ALL_CPPFLAGS    := -D_GNU_SOURCE $(PUBLIC_CPPFLAGS) -Iinclude -Isrc $(CPPFLAGS)
+# Building bitters itself needs the feature flags and _GNU_SOURCE, which
+# src/gpio.c refuses to compile without. A consumer needs neither: the
+# headers are flag-independent and compile without _GNU_SOURCE, so
+# bitters.pc exports nothing but the include path.
+ALL_CPPFLAGS    := -D_GNU_SOURCE $(FEATURES) -Iinclude -Isrc $(CPPFLAGS)
 
 SRC       := $(wildcard src/*.c)
 OBJ       := $(SRC:.c=.o)
@@ -134,19 +129,19 @@ $(NAME).pc: Makefile
 	  'Description: microcontroller-style GPIO, SPI and I2C for Linux' \
 	  'Version: $(VERSION)' \
 	  'Libs: -L$${libdir} -l$(NAME) $(LIBS)' \
-	  'Cflags: -I$${includedir} $(PUBLIC_CPPFLAGS)' > $@
+	  'Cflags: -I$${includedir}' > $@
 
 # Report exactly how this tree would be built.
 features:
 	@echo 'THREADS=$(THREADS) GPIO_IRQ=$(GPIO_IRQ) ASSERT=$(ASSERT) LOG=$(LOG)'
-	@echo 'public cppflags: $(PUBLIC_CPPFLAGS)'
+	@echo 'build cppflags : $(FEATURES)'
 	@echo 'libs           : $(LIBS)'
 
 # Everything needed to compile bitters straight into another project.
 sources:
 	@echo 'sources : $(SRC)'
 	@echo 'include : include'
-	@echo 'cflags  : -D_GNU_SOURCE $(PUBLIC_CPPFLAGS) -Iinclude'
+	@echo 'cflags  : -D_GNU_SOURCE $(FEATURES) -Iinclude'
 	@echo 'libs    : $(LIBS)'
 	@echo '(the public headers need no flags; only the .c files need -D_GNU_SOURCE)'
 

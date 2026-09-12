@@ -279,21 +279,23 @@ int bitters_gpio_irq_wait(bitters_gpio_pin_t *pin);
  */
 int bitters_gpio_irq_fill_pollfd(bitters_gpio_pin_t *pin, struct pollfd *pfd);
 
-#if defined(BITTERS_WITH_THREADS) || defined(__DOXYGEN__)
 /**
  * Register a callback for processing interrupt on pin.
  * @note Undefined behaviour if used with bitters_gpio_irq_wait or poll
+ * @note Always declared. A library built without BITTERS_WITH_GPIO_IRQ
+ *       and BITTERS_WITH_THREADS returns @c -ENOSYS here instead of
+ *       omitting the function, so this header does not depend on how
+ *       the library was compiled.
  *
  * @param pin 		pin identification
  * @param cb		callback (use NULL to disable)
  * @param args		argument passed to the callback
- * @return -ENOSYS	if not compiled with BITTERS_WITH_GPIO_IRQ and
- *			BITTERS_WITH_THREADS
+ * @return -ENOSYS	if the library was built without interrupt
+ *			callback support
  * @return < 0 in case of error (-errno)
  */
 int bitters_gpio_irq_callback(bitters_gpio_pin_t *pin,
 			      bitters_gpio_irq_cb_t cb, void *args);
-#endif
 /** @} */
 
 #endif
