@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020,2024-2025
+ * Copyright (c) 2019-2020,2024-2026
  * Stephane D'Alu, Inria Chroma / Inria Agora, INSA Lyon, CITI Lab.
  *
  * SPDX-License-Identifier: Apache-2.0
