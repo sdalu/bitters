@@ -139,6 +139,14 @@ vars)
     printf "BITTERS_INCLUDE='%s'\n"    "$inc"
     printf "BITTERS_CFLAGS='%s'\n"     "-D_GNU_SOURCE -I$inc"
     printf "BITTERS_LIBS='%s'\n"       "`echo $libs`"
+
+    # The release, and what a build between releases adds to it. A consumer
+    # that wants the library to know its own commit passes the second on as
+    # -DBITTERS_VERSION_GIT; bitters_version() then reports it. Worked out
+    # here, where bitters' own git tree is: empty for a tarball, and for a
+    # tree copied into somebody else's repository.
+    printf "BITTERS_VERSION='%s'\n"     "$(hdrversion)"
+    printf "BITTERS_VERSION_GIT='%s'\n" "$(sh "$top/scripts/gitversion.sh")"
     ;;
 
 *)

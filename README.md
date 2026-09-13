@@ -105,7 +105,14 @@ BITTERS_SUBSYSTEMS='gpio i2c spi'
 BITTERS_INCLUDE='/path/to/bitters/include'
 BITTERS_CFLAGS='-D_GNU_SOURCE -I/path/to/bitters/include'
 BITTERS_LIBS='-lpthread'
+BITTERS_VERSION='1.1.1'
+BITTERS_VERSION_GIT='+4.ge8649eb'
 ```
+
+`BITTERS_VERSION_GIT` is what a build between releases adds to the release;
+pass it on with `-DBITTERS_VERSION_GIT` and `bitters_version()` reports it.
+It is empty for a release, for a tarball, and for a tree vendored inside
+another project's repository.
 
 The per-part lists are there so a build script can take the subsystems it
 uses and leave the rest, the same choice `bitters.cmake` offers a CMake
