@@ -116,11 +116,40 @@ HEADERS    = include/bitters.h
 SUBHEADERS = include/bitters/delay.h include/bitters/gpio.h \
              include/bitters/i2c.h include/bitters/rpi.h include/bitters/spi.h
 
+# --- targets ----------------------------------------------------------
+# help comes first so that a bare `make` prints it: both makes take the
+# first target as the default goal, and what to build is usually the wrong
+# question for a tree that is mostly vendored into other projects.
+help:						## show this help
+	@echo 'bitters -- microcontroller-style GPIO, SPI and I2C for Linux'
+	@echo ''
+	@echo 'Targets (a bare `make` prints this):'
+	@awk -F':.*## ' '/^[a-z][a-z-]*:.*## /{printf "  %-12s %s\n", $$1, $$2}' \
+	    Makefile
+	@echo ''
+	@echo 'Features (build-time only; the public API never depends on them):'
+	@printf '  %-12s %-5s %s\n' \
+	    THREADS  '$(THREADS)'  'thread support' \
+	    GPIO_IRQ '$(GPIO_IRQ)' 'interrupt callbacks (implies THREADS=yes)' \
+	    ASSERT   '$(ASSERT)'   'assertions in gpio/spi/i2c' \
+	    LOG      '$(LOG)'      'logging to stderr'
+	@echo ''
+	@echo 'Other variables (current value):'
+	@printf '  %-12s %s\n' \
+	    CC       '$(CC)' \
+	    CFLAGS   '$(CFLAGS)  (yours; the project always adds $(WARNINGS))' \
+	    WERROR   '$(WERROR)  (yes turns warnings into errors)' \
+	    PREFIX   '$(PREFIX)' \
+	    DESTDIR  '$(DESTDIR)  (staging prefix for packaging)'
+	@echo ''
+	@echo 'This Makefile works with both GNU make and BSD make.'
+	@echo 'The test suite has its own targets; see tests/README.md.'
+
 .SUFFIXES:
 .SUFFIXES: .c .o .lo
 
 # Shared by default; the static archive is opt-in.
-all: featurecheck shared				## build the shared library (default)
+all: featurecheck shared				## build the shared library
 
 static: $(STATIC)				## build libbitters.a, to link into one program
 shared: $(SHARED)				## build libbitters.so
@@ -222,31 +251,6 @@ clean:						## remove build products
 distclean: clean				## clean, plus the generated documentation
 	rm -rf doc/html doc/latex
 
-
-help:						## show this help
-	@echo 'bitters -- microcontroller-style GPIO, SPI and I2C for Linux'
-	@echo ''
-	@echo 'Targets:'
-	@awk -F':.*## ' '/^[a-z][a-z-]*:.*## /{printf "  %-12s %s\n", $$1, $$2}' \
-	    Makefile
-	@echo ''
-	@echo 'Features (build-time only; the public API never depends on them):'
-	@printf '  %-12s %-5s %s\n' \
-	    THREADS  '$(THREADS)'  'thread support' \
-	    GPIO_IRQ '$(GPIO_IRQ)' 'interrupt callbacks (implies THREADS=yes)' \
-	    ASSERT   '$(ASSERT)'   'assertions in gpio/spi/i2c' \
-	    LOG      '$(LOG)'      'logging to stderr'
-	@echo ''
-	@echo 'Other variables (current value):'
-	@printf '  %-12s %s\n' \
-	    CC       '$(CC)' \
-	    CFLAGS   '$(CFLAGS)  (yours; the project always adds $(WARNINGS))' \
-	    WERROR   '$(WERROR)  (yes turns warnings into errors)' \
-	    PREFIX   '$(PREFIX)' \
-	    DESTDIR  '$(DESTDIR)  (staging prefix for packaging)'
-	@echo ''
-	@echo 'This Makefile works with both GNU make and BSD make.'
-	@echo 'The test suite has its own targets; see tests/README.md.'
 
 .PHONY: all static shared featurecheck check check-gpio doc install \
 	uninstall clean distclean version features sources help
