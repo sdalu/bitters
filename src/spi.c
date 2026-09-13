@@ -55,24 +55,69 @@
 
 #if !defined(BITTERS_SILENCE_WARNING            ) &&			\
     !defined(BITTERS_SILENCE_SPI_BUFSIZE_WARNING)
+/* The spidev buffer a single transfer has to fit in: what the kernel was
+ * told, and one page when it was told nothing (spidev's own default).
+ * Read once; 0 when it cannot be established. */
+static size_t
+_bitters_spi_bufsiz(void)
+{
+    /* Atomic like the one-shot flag below, and for the same reason. Two
+     * threads arriving together read /sys twice and store the same
+     * answer, which is why a plain relaxed load and store is enough. */
+    static size_t cached = 0;
+    size_t bufsiz = __atomic_load_n(&cached, __ATOMIC_RELAXED);
+    if (bufsiz != 0)
+	return bufsiz;
+
+    FILE *fp = fopen("/sys/module/spidev/parameters/bufsiz", "r");
+    if (fp != NULL) {
+	unsigned long value;
+	if (fscanf(fp, "%lu", &value) == 1)
+	    bufsiz = (size_t)value;
+	fclose(fp);
+    }
+    if (bufsiz == 0) {
+	long page = sysconf(_SC_PAGESIZE);
+	if (page > 0)
+	    bufsiz = (size_t)page;
+    }
+    __atomic_store_n(&cached, bufsiz, __ATOMIC_RELAXED);
+    return bufsiz;
+}
+
+/* Explain a failed transfer that the spidev buffer limit explains, and
+ * say nothing otherwise.
+ *
+ * This used to be said by bitters_spi_init(), to every program, before it
+ * had transferred anything: a limit most of them never come near, on a
+ * path where nothing had gone wrong yet. One consumer silenced every
+ * warning the library has to be rid of it. Here it costs a stat of
+ * /sys on the failure path only, and when it does appear it is about the
+ * transfer that just failed. */
 static void
-_bitters_spi_warn_about_bufsize_config(void) {
-    static int once = 0;
+_bitters_spi_warn_about_bufsize(size_t len)
+{
+    static int once   = 0;
+    size_t     bufsiz = _bitters_spi_bufsiz();
+
+    if ((bufsiz == 0) || (len <= bufsiz))                          return;
     if (__atomic_exchange_n(&once, 1, __ATOMIC_RELAXED) ||
 	(getenv("BITTERS_SILENCE_WARNING"            ) != NULL) ||
 	(getenv("BITTERS_SILENCE_SPI_BUFSIZE_WARNING") != NULL)) return;
 
     fprintf(stderr,
 	"\n"
-	"bitters: On linux SPI buffer size is limited to one page\n"
-	"       | this can be increased by adding spidev.bufsiz=65536 to the kernel"
-	"\n");
+	"bitters: spi: a %zu byte segment does not fit the %zu byte spidev\n"
+	"       | buffer, which is what this transfer failed on. Either\n"
+	"       |   * raise it: spidev.bufsiz=<bytes> on the kernel command line\n"
+	"       |   * or split the transfer into segments that fit\n"
+	"\n", len, bufsiz);
 }
 
-#  define BITTERS_SPI_WARN_ABOUT_BUFSIZE_CONFIG()			\
-    _bitters_spi_warn_about_bufsize_config()
+#  define BITTERS_SPI_WARN_ABOUT_BUFSIZE(len)				\
+    _bitters_spi_warn_about_bufsize(len)
 #else
-#  define BITTERS_SPI_WARN_ABOUT_BUFSIZE_CONFIG()
+#  define BITTERS_SPI_WARN_ABOUT_BUFSIZE(len)	((void)(len))
 #endif
 
 /*== Exported function =================================================*/
@@ -80,7 +125,6 @@ _bitters_spi_warn_about_bufsize_config(void) {
 int
 bitters_spi_init(void)
 {
-    BITTERS_SPI_WARN_ABOUT_BUFSIZE_CONFIG();
     return 0;
 }
 
@@ -231,6 +275,7 @@ bitters_spi_transfer(bitters_spi_t *spi,
 	return -EINVAL;
 
     struct spi_ioc_transfer tr[count];
+    size_t longest = 0;
     for (unsigned int i = 0 ; i < count ; i++) {
 	/* Kernel spi_ioc_transfer.len is a 32-bit field.
 	 * Compiled only where size_t is wider than that: on a 32-bit
@@ -248,6 +293,8 @@ bitters_spi_transfer(bitters_spi_t *spi,
 	tr[i].len           = xfr[i].len;
 	tr[i].bits_per_word = spi->word;
 	tr[i].speed_hz      = spi->speed;
+	if (xfr[i].len > longest)
+	    longest = xfr[i].len;
     }
 
     int rc = ioctl(spi->fd, SPI_IOC_MESSAGE(count), &tr);
@@ -255,6 +302,10 @@ bitters_spi_transfer(bitters_spi_t *spi,
 	rc = -errno;
 	BITTERS_SPI_LOG("can't send spi message (count=%d) (%s)",
 		count, strerror(errno));
+	/* A segment the spidev buffer cannot hold is a failure the caller
+	 * can act on, and one this layer cannot paper over: say so, once,
+	 * and only when that is what the transfer ran into */
+	BITTERS_SPI_WARN_ABOUT_BUFSIZE(longest);
     } else {
 	BITTERS_SPI_LOG("transfered done (count=%d)", count);
     }

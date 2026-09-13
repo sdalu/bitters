@@ -26,7 +26,7 @@ GPIOSRC  = ../src/gpio.c
 # t_init_repeat is built WITHOUT -DNDEBUG on purpose: it checks that a
 # repeated bitters_gpio_init() does not trip the assertion.
 # t_pins_dangling #includes ../src/gpio.c itself, for the private struct.
-PLAIN   = t_i2c_endian t_delay t_spi_args t_i2c_args
+PLAIN   = t_i2c_endian t_delay t_spi_args t_i2c_args t_spi_bufsize
 GPIO    = t_init_repeat t_irq_delivery t_irq_sibling_reconfig t_pins_dangling \
           t_race_after t_race_enable t_lock_stress t_errno t_c8 t_starvation \
           t_soak t_allocfail t_cross_teardown t_irq_wait t_pin_rw
@@ -51,6 +51,11 @@ t_delay: t_delay.c ../src/delay.c
 t_spi_args: t_spi_args.c ../src/spi.c
 	$(CC) $(ALL_CFLAGS) $(CPPFLAGS) -DNDEBUG -o $@ t_spi_args.c ../src/spi.c $(LDLIBS)
 
+# t_spi_bufsize is about a warning, so it must not be built with the flag
+# that compiles warnings out.
+t_spi_bufsize: t_spi_bufsize.c ../src/spi.c
+	$(CC) $(ALL_CFLAGS) $(CPPFLAGS) -DNDEBUG -o $@ t_spi_bufsize.c ../src/spi.c $(LDLIBS)
+
 t_i2c_args: t_i2c_args.c ../src/i2c.c
 	$(CC) $(ALL_CFLAGS) $(CPPFLAGS) -DNDEBUG -o $@ t_i2c_args.c ../src/i2c.c $(LDLIBS)
 
@@ -72,6 +77,7 @@ check: $(PLAIN)
 	@BITTERS_SILENCE_WARNING=1 ./t_delay
 	@BITTERS_SILENCE_WARNING=1 ./t_spi_args
 	@BITTERS_SILENCE_WARNING=1 ./t_i2c_args
+	@./t_spi_bufsize
 
 check-gpio: all
 	@set -- `gpiodetect 2>/dev/null | sed -n 's/^\(gpiochip[0-9]*\) \[gpio-mockup.*/\1/p'`; \
