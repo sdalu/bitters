@@ -16,6 +16,25 @@
 #   BITTERS_SOURCES_I2C      the I2C API
 #   BITTERS_SOURCES_SPI      the SPI API
 #
+# Which of them you need, and nothing more: the subsystems never reach into
+# one another, and CORE reaches into the ones this build says it has. Any
+# combination links, CORE alone included.
+#
+# Name the ones you took, with -DBITTERS_WITH_GPIO, -DBITTERS_WITH_SPI and
+# -DBITTERS_WITH_I2C, and put them on *your* files as well as on bitters.c
+# -- INTERFACE definitions, so they reach both. They are what the headers
+# are gated by, so a subsystem you did not name is not declared either, and
+# a call to it is a compile error in the file that made it: earlier than a
+# missing symbol at link time, and unmissable next to a runtime code a
+# caller can ignore.
+#
+# Unlike BITTERS_WITH_THREADS they say nothing about how bitters itself was
+# built -- they say which sources your target carries, which is yours to
+# decide. A consumer of an installed library gets them from bitters.pc
+# instead, having picked no source list of its own.
+#
+# DELAY has no flag: nothing reaches into it, so it is simply left out.
+#
 # The .c files need -D_GNU_SOURCE; the public headers do not, and do not
 # depend on the feature flags either -- a function whose feature was not
 # compiled in returns -ENOSYS rather than going missing, so the headers
@@ -35,7 +54,9 @@
 #   add_library(bitters INTERFACE)
 #   target_include_directories(bitters INTERFACE ${BITTERS_INCLUDE_DIR})
 #   target_compile_definitions(bitters INTERFACE _GNU_SOURCE
-#                                                BITTERS_SILENCE_WARNING)
+#                                                BITTERS_SILENCE_WARNING
+#                                                BITTERS_WITH_GPIO
+#                                                BITTERS_WITH_SPI)
 #   target_sources(bitters INTERFACE ${BITTERS_SOURCES_CORE}
 #                                    ${BITTERS_SOURCES_GPIO}
 #                                    ${BITTERS_SOURCES_SPI})
@@ -43,10 +64,23 @@
 #   target_link_libraries(gui    PRIVATE bitters Threads::Threads)
 #   target_compile_definitions(gui PRIVATE BITTERS_WITH_THREADS)
 #
+# I2C is left out there, so BITTERS_WITH_I2C is not among the definitions
+# -- and because they are INTERFACE, an I2C call in either program does not
+# compile either. bitters_init() remains the one call both make. delay.c is
+# left out as well and needs no flag.
+#
 # This file is for vendored trees. Installing bitters gives you a
 # pkg-config file instead; see the README.
 
 set(BITTERS_VERSION       1.1.1)
+
+# The subsystems bitters_init() brings up, and so the ones whose headers
+# are gated by BITTERS_WITH_<SUBSYSTEM>. CORE and DELAY have no gate:
+# nothing reaches into DELAY, and CORE is what does the reaching.
+set(BITTERS_SUBSYSTEMS    gpio i2c spi)
+
+# What a hosted link needs, given BITTERS_WITH_THREADS.
+set(BITTERS_LIBS          pthread)
 
 set(BITTERS_INCLUDE_DIR   ${CMAKE_CURRENT_LIST_DIR}/include)
 

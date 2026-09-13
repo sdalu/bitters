@@ -95,11 +95,23 @@ paths so the caller need not know where bitters sits:
 
 ```sh
 $ make -s sources
-BITTERS_SOURCES='/path/to/bitters/src/bitters.c ... /path/to/bitters/src/spi.c'
+BITTERS_SOURCES_CORE='/path/to/bitters/src/bitters.c'
+BITTERS_SOURCES_DELAY='/path/to/bitters/src/delay.c'
+BITTERS_SOURCES_GPIO='/path/to/bitters/src/gpio.c'
+BITTERS_SOURCES_I2C='/path/to/bitters/src/i2c.c'
+BITTERS_SOURCES_SPI='/path/to/bitters/src/spi.c'
+BITTERS_SOURCES='... all five ...'
+BITTERS_SUBSYSTEMS='gpio i2c spi'
 BITTERS_INCLUDE='/path/to/bitters/include'
-BITTERS_CFLAGS='-D_GNU_SOURCE -DBITTERS_WITH_THREADS -DBITTERS_WITH_GPIO_IRQ -I/path/to/bitters/include'
+BITTERS_CFLAGS='-D_GNU_SOURCE -I/path/to/bitters/include'
 BITTERS_LIBS='-lpthread'
 ```
+
+The per-part lists are there so a build script can take the subsystems it
+uses and leave the rest, the same choice `bitters.cmake` offers a CMake
+consumer. Both come from `bitters.cmake`, which is the manifest: the
+Makefile reads it through `scripts/manifest.sh` rather than keeping a
+second copy, so there is no second copy to drift.
 
 ```sh
 eval "$(make -s -C 3rd/bitters sources)"
@@ -107,9 +119,12 @@ cc $BITTERS_CFLAGS -c $BITTERS_SOURCES
 ```
 
 `BITTERS_CFLAGS` is for compiling **bitters**, not for compiling against
-it: only the `.c` files need `-D_GNU_SOURCE`, and the public headers
-compile without any special flag. To build an application, use
-`pkg-config` (below).
+it: only the `.c` files need `-D_GNU_SOURCE`. It carries what compiling
+bitters *requires* and nothing else -- the feature selection (`THREADS`,
+`GPIO_IRQ`, `ASSERT`, `LOG`) and the `BITTERS_WITH_*` gates for the parts
+you took are yours to choose, and a default printed here would be a second
+place they were decided. To build an application against an installed
+library, use `pkg-config` (below), which does carry the gates.
 
 For CMake there is `bitters.cmake`, which needs no `make` at all:
 
@@ -126,6 +141,41 @@ bitters differently for different targets -- giving only your threaded
 program `BITTERS_WITH_THREADS`, say -- and leave out a subsystem you do
 not use, through `BITTERS_SOURCES_CORE`, `_GPIO`, `_SPI`, `_I2C` and
 `_DELAY`. It also sets `BITTERS_VERSION`.
+
+Any combination links: the subsystems never reach into one another, and
+`CORE` reaches into the ones the build says it has, so `CORE` alone links
+too.
+
+Name the subsystems you took, with `-DBITTERS_WITH_GPIO`,
+`-DBITTERS_WITH_SPI` and `-DBITTERS_WITH_I2C` -- **on your own files as
+well as on `bitters.c`**. Those are what `bitters/spi.h` and its siblings
+are gated by, so a subsystem you did not name is not declared either, and a
+call to it is a compile error in the file that made it. That is the
+earliest place to hear about a subsystem you chose not to carry: earlier
+than a missing symbol at link time, and unmissable next to a runtime code
+that a caller ignoring return values would never see.
+
+Unlike `BITTERS_WITH_THREADS` these say nothing about how bitters itself
+was built. They say which sources your program carries, which is your
+choice, and that is why they may gate a declaration where
+`BITTERS_WITH_THREADS` must not: you cannot know how the library was
+compiled, but you certainly know what you compiled.
+
+A consumer of an **installed** library did not pick a source list and so
+cannot know either -- `bitters.pc` hands the three over in its `Cflags`,
+alongside the include path, and `pkg-config --cflags bitters` is all such a
+consumer needs.
+
+`_DELAY` has no flag and is simply left out when it is not wanted, because
+nothing reaches into it.
+
+Those are flags for compiling **bitters**, like `BITTERS_WITH_THREADS`:
+read by `bitters.c` and by nothing else. No public header mentions them
+and `bitters.pc` exports only the include path, so nothing you compile
+*against* bitters has to know how bitters was compiled.
+
+`tests/check-subset.sh`, run by `make check`, links the subsets with their
+flags so the table cannot quietly stop being true.
 
 The tree builds warning-free with `-Wall -Wextra`; `make WERROR=yes`
 turns warnings into errors, which is what CI should use. Those warning
@@ -247,15 +297,21 @@ https://michael.franzl.name/blog/posts/2016-11-10-setting-i2c-speed-raspberry-pi
 
 Library
 -------
-`bitters_init()` initializes the whole library (all the subsystems below).
-If you only use one subsystem, you can instead call its dedicated init
-function (`bitters_gpio_init()`, `bitters_spi_init()`, `bitters_i2c_init()`).
+`bitters_init()` initializes the library: one call, whatever you use. If
+you only use one subsystem you can instead call its dedicated init
+function (`bitters_gpio_init()`, `bitters_spi_init()`,
+`bitters_i2c_init()`); calling an init twice, or in either order, is fine.
+
+
+A vendored tree names the subsystems it took with `-DBITTERS_WITH_GPIO` /
+`_SPI` / `_I2C`, and `bitters_init()` brings up those and is still the one
+call -- see [Vendoring](#vendoring) above.
 
 ### API Functions
 
 | **Function**                | **Description**                                          |
 |-----------------------------|----------------------------------------------------------|
-| `bitters_init()`            | Initialize the library (all subsystems)                  |
+| `bitters_init()`            | Initialize the library (all subsystems present)           |
 | `bitters_reduced_latency()` | Reduce IO latency (raise scheduling priority, lock pages in memory) |
 
 

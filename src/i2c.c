@@ -24,6 +24,13 @@
 #include "bitters.h"
 #include "bitters/i2c.h"
 
+/* Compiling this file is what having I2C means, so the two cannot be
+ * asked for separately. Said here rather than left to the wall of errors
+ * a header declaring nothing would produce. */
+#if !defined(BITTERS_WITH_I2C)
+#  error "i2c.c needs -DBITTERS_WITH_I2C: compiling it is what having I2C means"
+#endif
+
 
 
 /*== Log & Assert helpers ==============================================*/

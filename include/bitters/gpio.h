@@ -17,6 +17,25 @@
  */
 
 
+/* Whether this build has the GPIO subsystem, and so whether this header
+ * declares it.
+ *
+ * Passed when compiling bitters -- the Makefile has it in FEATURES -- and
+ * carried to consumers of an installed library by bitters.pc. A vendored
+ * tree names the subsystems it took, on its own files as well as on
+ * bitters.c, and a bitters_gpio_pin_enable() call in a build that did not take gpio.c is then
+ * a compile error in the file that made it: earlier than a missing symbol
+ * at link time, and unmissable next to a runtime code a caller ignoring
+ * return values would never see.
+ *
+ * Unlike BITTERS_WITH_THREADS this says nothing about how bitters itself
+ * was built -- it says which sources the program carries, which is the
+ * program's own choice. That is why it may gate a declaration where
+ * BITTERS_WITH_THREADS must not (18fd153): a consumer cannot know how the
+ * library was compiled, but it certainly knows what it compiled.
+ */
+#if defined(BITTERS_WITH_GPIO) || defined(__DOXYGEN__)
+
 #include <stddef.h>
 #include <stdint.h>
 #include <poll.h>
@@ -204,8 +223,11 @@ typedef struct bitters_gpio_pin {
 
 /**
  * Initialize the GPIO subsystem.
- * Normally called automatically by bitters_init(); call it directly only
- * if you use the GPIO API without the rest of the library.
+ *
+ * Installs the signal handler the interrupt threads need, so unlike the
+ * SPI and I2C ones this has real work to do. bitters_init() calls it, and
+ * so may you if you use the GPIO API without the rest of the library;
+ * calling both, in either order, is fine.
  *
  * @return < 0 in case of error (-errno)
  */
@@ -296,6 +318,8 @@ int bitters_gpio_irq_fill_pollfd(bitters_gpio_pin_t *pin, struct pollfd *pfd);
  */
 int bitters_gpio_irq_callback(bitters_gpio_pin_t *pin,
 			      bitters_gpio_irq_cb_t cb, void *args);
+#endif	/* BITTERS_WITH_GPIO */
+
 /** @} */
 
 #endif

@@ -17,6 +17,25 @@
  */
 
 
+/* Whether this build has the I2C subsystem, and so whether this header
+ * declares it.
+ *
+ * Passed when compiling bitters -- the Makefile has it in FEATURES -- and
+ * carried to consumers of an installed library by bitters.pc. A vendored
+ * tree names the subsystems it took, on its own files as well as on
+ * bitters.c, and a bitters_i2c_transfer() call in a build that did not take i2c.c is then
+ * a compile error in the file that made it: earlier than a missing symbol
+ * at link time, and unmissable next to a runtime code a caller ignoring
+ * return values would never see.
+ *
+ * Unlike BITTERS_WITH_THREADS this says nothing about how bitters itself
+ * was built -- it says which sources the program carries, which is the
+ * program's own choice. That is why it may gate a declaration where
+ * BITTERS_WITH_THREADS must not (18fd153): a consumer cannot know how the
+ * library was compiled, but it certainly knows what it compiled.
+ */
+#if defined(BITTERS_WITH_I2C) || defined(__DOXYGEN__)
+
 #include <stddef.h>
 #include <stdint.h>
 
@@ -103,8 +122,13 @@ struct bitters_i2c_transfer {
 
 /**
  * Initialize the I2C subsystem.
- * Normally called automatically by bitters_init(); call it directly only
- * if you use the I2C API without the rest of the library.
+ *
+ * @note Called by bitters_init(), and safe to call directly as well;
+ *       calling it twice is fine. It currently has nothing to do and
+ *       returns 0. A vendored tree that did not take i2c.c compiles with
+ *       without @c -DBITTERS_WITH_I2C, and then this declaration -- and the rest
+ *       of this header -- is not there at all, so the question does not
+ *       arise.
  *
  * @return < 0 in case of error (-errno)
  */
@@ -152,6 +176,8 @@ int bitters_i2c_set_speed(bitters_i2c_t *i2c, uint32_t speed);
 int bitters_i2c_transfer(bitters_i2c_t *i2c, bitters_i2c_addr_t addr,
 	const struct bitters_i2c_transfer *xfr, unsigned int count);
 
+
+#endif	/* BITTERS_WITH_I2C */
 
 /** @} */
 

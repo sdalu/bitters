@@ -24,6 +24,13 @@
 #include "bitters/gpio.h"
 #include "bitters/spi.h"
 
+/* Compiling this file is what having SPI means, so the two cannot be
+ * asked for separately. Said here rather than left to the wall of errors
+ * a header declaring nothing would produce. */
+#if !defined(BITTERS_WITH_SPI)
+#  error "spi.c needs -DBITTERS_WITH_SPI: compiling it is what having SPI means"
+#endif
+
 
 
 /*== Log & Assert helpers ==============================================*/

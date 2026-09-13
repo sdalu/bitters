@@ -40,6 +40,13 @@
 
 #include "bitters.h"
 #include "bitters/gpio.h"
+
+/* Compiling this file is what having GPIO means, so the two cannot be
+ * asked for separately. Said here rather than left to the wall of errors
+ * a header declaring nothing would produce. */
+#if !defined(BITTERS_WITH_GPIO)
+#  error "gpio.c needs -DBITTERS_WITH_GPIO: compiling it is what having GPIO means"
+#endif
 #include "queue.h"
 
 #if defined(BITTERS_WITH_THREADS)

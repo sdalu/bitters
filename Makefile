@@ -29,7 +29,10 @@
 NAME       = bitters
 # Keep in step with the release tag: `make version` prints this, and it
 # is what bitters.pc and the soname carry.
-VERSION    = 1.1.1
+MANIFEST   = sh scripts/manifest.sh
+
+# Keep in step with the release tag; bitters.cmake is where it is written.
+VERSION   != $(MANIFEST) version
 SOMAJOR    = 1
 
 PREFIX    ?= /usr/local
@@ -47,7 +50,9 @@ DOXYGEN   ?= doxygen
 # project requires in their own variable, always applied, and leave
 # CFLAGS to the user and to the environment.
 CFLAGS    ?= -O2 -g
-WARNINGS   = -Wall -Wextra
+# -Wundef: an undefined name in an #if evaluates quietly to 0, so a typo
+# in one is worth hearing about. The tree is clean under it.
+WARNINGS   = -Wall -Wextra -Wundef
 LDFLAGS   ?=
 
 # --- features ---------------------------------------------------------
@@ -63,7 +68,7 @@ WERROR    ?= no
 
 T_yes      = -DBITTERS_WITH_THREADS
 T_no       =
-P_yes      = -lpthread
+P_yes     != $(MANIFEST) libs
 P_no       =
 G_yes      = -DBITTERS_WITH_GPIO_IRQ
 G_no       =
@@ -76,19 +81,30 @@ O_no       =
 W_yes      = -Werror
 W_no       =
 
-FEATURES   = $(T_$(THREADS)) $(G_$(GPIO_IRQ)) $(A_$(ASSERT)) $(O_$(LOG))
+# Which subsystems this build has. Not switches: the library carries all
+# of them, so all of them are named -- from bitters.cmake, which is where
+# the list of them lives. They exist for a vendored tree that took only
+# some of the sources (see the README's Vendoring section) and they gate
+# the declarations, so bitters.pc carries them too.
+SUBSYSTEMS != $(MANIFEST) withflags
+
+FEATURES   = $(T_$(THREADS)) $(G_$(GPIO_IRQ)) $(A_$(ASSERT)) $(O_$(LOG)) \
+             $(SUBSYSTEMS)
 LIBS       = $(P_$(THREADS))
 
 # Building bitters itself needs the feature flags and _GNU_SOURCE, which
-# src/gpio.c refuses to compile without. A consumer needs neither: the
-# headers are flag-independent and compile without _GNU_SOURCE, so
-# bitters.pc exports nothing but the include path.
-ALL_CPPFLAGS = -D_GNU_SOURCE $(FEATURES) -Iinclude -Isrc $(CPPFLAGS)
+# src/gpio.c refuses to compile without. A consumer needs _GNU_SOURCE for
+# none of it, and of the flags only $(SUBSYSTEMS), which gate the
+# declarations of the subsystems this build has -- so that is what
+# bitters.pc exports beside the include path, and nothing else.
+INCDIR    != $(MANIFEST) incdir
+
+ALL_CPPFLAGS = -D_GNU_SOURCE $(FEATURES) -I$(INCDIR) -Isrc $(CPPFLAGS)
 ALL_CFLAGS   = $(CFLAGS) $(WARNINGS) $(W_$(WERROR))
 
-# Listed rather than globbed: $(wildcard) is GNU-only, and an explicit
-# list is what a vendoring consumer wants from `make sources` anyway.
-SRC        = src/bitters.c src/delay.c src/gpio.c src/i2c.c src/spi.c
+# Read from the manifest rather than listed here or globbed: bitters.cmake
+# is the one place the list lives, and $(wildcard) is GNU-only besides.
+SRC       != $(MANIFEST) sources
 OBJ        = $(SRC:.c=.o)
 PICOBJ     = $(SRC:.c=.lo)
 
@@ -142,7 +158,7 @@ $(NAME).pc: Makefile
 	  'Description: microcontroller-style GPIO, SPI and I2C for Linux' \
 	  'Version: $(VERSION)' \
 	  'Libs: -L$${libdir} -l$(NAME) $(LIBS)' \
-	  'Cflags: -I$${includedir}' > $@
+	  'Cflags: -I$${includedir} $(SUBSYSTEMS)' > $@
 
 # Bare, so a script can use it:  v=`make -s version`
 version:					## print the library version
@@ -161,15 +177,7 @@ features:					## print the feature selection in force
 #
 # Paths are absolute, so the caller need not know where bitters sits.
 sources:					## print vendoring files and flags as shell variables
-	@d=`pwd`; out=""; \
-	 for f in $(SRC); do \
-	     if [ -z "$$out" ]; then out="$$d/$$f"; else out="$$out $$d/$$f"; fi; \
-	 done; \
-	 printf "BITTERS_SOURCES='%s'\n" "$$out"; \
-	 printf "BITTERS_INCLUDE='%s'\n" "$$d/include"; \
-	 printf "BITTERS_CFLAGS='%s'\n" \
-	     "`echo -D_GNU_SOURCE $(FEATURES) -I$$d/include | tr -s ' '`"; \
-	 printf "BITTERS_LIBS='%s'\n" "`echo $(LIBS) | tr -s ' '`"
+	@$(MANIFEST) vars "`pwd`"
 
 check:						## run the tests needing no privilege
 	cd tests && $(MAKE) check
@@ -213,6 +221,7 @@ clean:						## remove build products
 
 distclean: clean				## clean, plus the generated documentation
 	rm -rf doc/html doc/latex
+
 
 help:						## show this help
 	@echo 'bitters -- microcontroller-style GPIO, SPI and I2C for Linux'

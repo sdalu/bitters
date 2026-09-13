@@ -12,12 +12,13 @@
 
 CC      ?= cc
 CFLAGS  ?= -O1 -g
-WARNINGS = -Wall -Wextra
+WARNINGS = -Wall -Wextra -Wundef
 WERROR  ?= no
 W_yes    = -Werror
 W_no     =
 
 CPPFLAGS = -D_GNU_SOURCE -DBITTERS_WITH_THREADS -DBITTERS_WITH_GPIO_IRQ \
+           -DBITTERS_WITH_GPIO -DBITTERS_WITH_SPI -DBITTERS_WITH_I2C \
            -I../include -I../src
 ALL_CFLAGS = $(CFLAGS) $(WARNINGS) $(W_$(WERROR))
 LDLIBS   = -lpthread
@@ -72,7 +73,8 @@ t_pins_dangling: t_pins_dangling.c $(GPIOSRC)
 # The mockup chips are discovered in the recipe: $(shell) is GNU-only.
 # t_cross_teardown needs a second chip and reports 77 (skip) without one.
 check: $(PLAIN)
-	@sh ./check-cmake.sh
+	@sh ./check-manifest.sh
+	@sh ./check-subset.sh
 	@BITTERS_SILENCE_WARNING=1 ./t_i2c_endian
 	@BITTERS_SILENCE_WARNING=1 ./t_delay
 	@BITTERS_SILENCE_WARNING=1 ./t_spi_args

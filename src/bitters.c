@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019
+ * Copyright (c) 2019,2026
  * Stephane D'Alu, Inria Chroma / Inria Agora, INSA Lyon, CITI Lab.
  *
  * SPDX-License-Identifier: Apache-2.0
@@ -18,6 +18,16 @@
 #include "bitters/spi.h"
 #include "bitters/i2c.h"
 
+/* Which subsystems this build has: BITTERS_WITH_GPIO, _SPI and _I2C, the
+ * same macros the headers above are guarded by, so the declaration and the
+ * call cannot disagree -- guard the header and forget the call, and this
+ * file stops compiling.
+ *
+ * That is what lets a vendored tree leave a subsystem out: a call from
+ * here is a reference that drags the source in whether or not the call
+ * ever runs.
+ */
+
 int
 bitters_init(void)
 {
@@ -34,17 +44,19 @@ bitters_init(void)
 #endif
     if (initialized) { goto done; }
 
-    /* Initialize GPIO */
+    /* Initialize the subsystems this build has (see above) */
+#if defined(BITTERS_WITH_GPIO)
     if ((rc = bitters_gpio_init()) < 0)
 	goto done;
-
-    /* Initialize SPI */
+#endif
+#if defined(BITTERS_WITH_SPI)
     if ((rc = bitters_spi_init()) < 0)
 	goto done;
-
-    /* Initialize I2C */
+#endif
+#if defined(BITTERS_WITH_I2C)
     if ((rc = bitters_i2c_init()) < 0)
 	goto done;
+#endif
 
     /* Mark as initialized, only on success, so that a failed
      * initialization can be retried */
