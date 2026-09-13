@@ -8,3 +8,7 @@ a.out
 bitters.pc
 doc/html/
 doc/latex/
+.gitversion
+# the test programs: one per tests/t_*.c, named by dropping the suffix
+tests/t_*
+!tests/t_*.c

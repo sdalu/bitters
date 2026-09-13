@@ -27,13 +27,21 @@
 # consumer needs no flag to match the library it links against.
 
 NAME       = bitters
-# Keep in step with the release tag: `make version` prints this, and it
-# is what bitters.pc and the soname carry.
 MANIFEST   = sh scripts/manifest.sh
 
-# Keep in step with the release tag; bitters.cmake is where it is written.
+# The release, from include/bitters/version.h, which is the one place it
+# is written -- bump it there and tag v<VERSION>. `make version` prints
+# this, and it is what bitters.pc and the soname carry: fixed, so that a
+# library named libbitters.so.1.1.1 is that release and nothing else.
 VERSION   != $(MANIFEST) version
 SOMAJOR    = 1
+
+# What a build between releases adds to it: +3.gae9c67b[.dirty], and
+# nothing for a release, for a tarball, or for a tree vendored inside
+# another project's repository (whose git state is not bitters'). It is
+# compiled into the library, where bitters_version() reports it; it stays
+# out of the soname and out of bitters.pc, which name the release.
+GITVER    != sh scripts/gitversion.sh
 
 PREFIX    ?= /usr/local
 LIBDIR    ?= $(PREFIX)/lib
@@ -98,8 +106,13 @@ LIBS       = $(P_$(THREADS))
 # declarations of the subsystems this build has -- so that is what
 # bitters.pc exports beside the include path, and nothing else.
 INCDIR    != $(MANIFEST) incdir
+VERSIONHDR = $(INCDIR)/bitters/version.h
 
-ALL_CPPFLAGS = -D_GNU_SOURCE $(FEATURES) -I$(INCDIR) -Isrc $(CPPFLAGS)
+# BITTERS_VERSION_GIT is the one thing here that no file holds; src/bitters.c
+# is what reads it, and version.h defaults it to "" for everyone who
+# compiles these sources without it.
+ALL_CPPFLAGS = -D_GNU_SOURCE $(FEATURES) -DBITTERS_VERSION_GIT='"$(GITVER)"' \
+               -I$(INCDIR) -Isrc $(CPPFLAGS)
 ALL_CFLAGS   = $(CFLAGS) $(WARNINGS) $(W_$(WERROR))
 
 # Read from the manifest rather than listed here or globbed: bitters.cmake
@@ -114,7 +127,8 @@ SHARED     = lib$(NAME).so.$(VERSION)
 
 HEADERS    = include/bitters.h
 SUBHEADERS = include/bitters/delay.h include/bitters/gpio.h \
-             include/bitters/i2c.h include/bitters/rpi.h include/bitters/spi.h
+             include/bitters/i2c.h include/bitters/rpi.h \
+             include/bitters/spi.h include/bitters/version.h
 
 # --- targets ----------------------------------------------------------
 # help comes first so that a bare `make` prints it: both makes take the
@@ -139,6 +153,7 @@ help:						## show this help
 	    CC       '$(CC)' \
 	    CFLAGS   '$(CFLAGS)  (yours; the project always adds $(WARNINGS))' \
 	    WERROR   '$(WERROR)  (yes turns warnings into errors)' \
+	    YES      '$(YES)  (1 answers yes to `make tag`)' \
 	    PREFIX   '$(PREFIX)' \
 	    DESTDIR  '$(DESTDIR)  (staging prefix for packaging)'
 	@echo ''
@@ -169,15 +184,39 @@ $(SHARED): $(PICOBJ)
 	ln -sf $(SHARED) $(SONAME)
 	ln -sf $(SONAME) lib$(NAME).so
 
+# The git part is in no file, so nothing would make an object stale when
+# HEAD moves, and the library would keep reporting the commit it was first
+# built at. This stamp remembers the answer instead. The rule runs every
+# time -- FORCE is a target that never exists, which is how both makes are
+# told to -- and does nothing at all unless the answer changed, so an
+# unmoved HEAD costs a `cat`.
+#
+# When it did change, the objects are removed rather than left to a
+# timestamp comparison: BSD make compares against the mtime it read before
+# this rule ran, so it would notice one `make` late and ship a library
+# reporting the wrong commit. Deleting what was compiled with the old
+# answer says the same thing in a way both makes act on at once.
+FORCE:
+
+.gitversion: FORCE
+	@if [ "`cat $@ 2>/dev/null`" != '$(GITVER)' ]; then \
+	    echo '$(GITVER)' > $@; rm -f $(OBJ) $(PICOBJ); fi
+
+# ... and on the header the release is written in, so that bumping it
+# recompiles what carries it. The only header dependency here: the rest of
+# the API does not change what an object *says about itself*.
+$(OBJ) $(PICOBJ): .gitversion $(VERSIONHDR)
+
 .c.o:
 	$(CC) $(ALL_CFLAGS) $(ALL_CPPFLAGS) -c -o $@ $<
 
 .c.lo:
 	$(CC) $(ALL_CFLAGS) $(ALL_CPPFLAGS) -fPIC -c -o $@ $<
 
-# Depends on the Makefile: a stale .pc carrying the previous feature set
-# is exactly the drift it exists to prevent.
-$(NAME).pc: Makefile
+# Depends on the Makefile and on the version header: a stale .pc carrying
+# the previous feature set, or the previous release, is exactly the drift
+# it exists to prevent.
+$(NAME).pc: Makefile $(VERSIONHDR)
 	@printf '%s\n' \
 	  'prefix=$(PREFIX)' \
 	  'libdir=$(LIBDIR)' \
@@ -190,8 +229,55 @@ $(NAME).pc: Makefile
 	  'Cflags: -I$${includedir} $(SUBSYSTEMS)' > $@
 
 # Bare, so a script can use it:  v=`make -s version`
-version:					## print the library version
+version:					## print the release version
 	@echo '$(VERSION)'
+
+# The same, plus what a build from this tree adds to it -- which is what
+# the library built here reports through bitters_version(). Equal to
+# `make version` exactly when this is a release tree.
+version-full:					## print the version this tree builds as
+	@echo '$(VERSION)$(GITVER)'
+
+# Tag the release from the version header, so that the tag and the header
+# cannot say different things: the number is not typed here, it is read
+# from $(VERSIONHDR). tests/check-manifest.sh checks the other direction,
+# for a tag made by hand -- scripts/checktag.sh, run below so that a tag
+# this target just made is confirmed rather than assumed.
+#
+# Refuses on an unclean worktree: a release tag names committed work, and
+# the version a build reports would otherwise include `.dirty`. Nothing is
+# pushed; that stays yours.
+#
+# In that order on purpose: the two refusals are instant, so they come
+# before the question -- there is no point asking about a tag that cannot be
+# made -- and the full check comes after it, because a minute of tests is
+# not worth spending on a `make tag` the answer to which is no. Tagging
+# something the suite has not passed is the mistake this exists to prevent,
+# so the check is inside the recipe rather than a prerequisite, which would
+# have run before the prompt.
+#
+# `make tag YES=1` answers yes for a script, and a non-interactive run with
+# no YES=1 reads EOF and declines -- the safe way round.
+tag: $(VERSIONHDR)				## tag this release, from the version header
+	@if [ -n "`git status --porcelain --untracked-files=no`" ]; then \
+	    echo 'make: uncommitted changes; commit them before tagging' >&2; \
+	    exit 1; fi
+	@if git rev-parse -q --verify 'refs/tags/v$(VERSION)' >/dev/null; then \
+	    echo 'make: v$(VERSION) exists already; bump $(VERSIONHDR) first' >&2; \
+	    exit 1; fi
+	@if [ "$(YES)" != 1 ]; then \
+	    printf 'tag v%s at %s? (the full check runs first) [y/N] ' \
+		'$(VERSION)' "`git rev-parse --short HEAD`"; \
+	    read -r ans || ans=; \
+	    case "$$ans" in \
+		y|Y|yes|YES) ;; \
+		*) echo 'make: not tagged'; exit 1 ;; \
+	    esac; \
+	fi
+	@$(MAKE) check
+	git tag -a -m '$(NAME) $(VERSION)' 'v$(VERSION)'
+	@sh scripts/checktag.sh '$(VERSION)'
+	@echo 'tagged v$(VERSION) -- push it with: git push origin v$(VERSION)'
 
 features:					## print the feature selection in force
 	@echo 'THREADS=$(THREADS) GPIO_IRQ=$(GPIO_IRQ) ASSERT=$(ASSERT) LOG=$(LOG)'
@@ -214,8 +300,12 @@ check:						## run the tests needing no privilege
 check-gpio:					## run the GPIO tests (needs root + gpio-mockup)
 	cd tests && $(MAKE) check-gpio
 
+# PROJECT_NUMBER is appended rather than written in the Doxyfile, so the
+# documentation says which version it documents without that being a
+# second place the version is kept.
 doc:						## generate the Doxygen documentation into doc/
-	$(DOXYGEN) Doxyfile
+	{ cat Doxyfile; echo 'PROJECT_NUMBER = $(VERSION)$(GITVER)'; } \
+	    | $(DOXYGEN) -
 
 # Installs whatever was built: the shared library always, the archive
 # only if `make static` produced one.
@@ -245,7 +335,7 @@ uninstall:					## remove what install put down
 
 clean:						## remove build products
 	rm -f $(OBJ) $(PICOBJ) $(STATIC) $(SHARED) $(SONAME) lib$(NAME).so \
-	      $(NAME).pc
+	      $(NAME).pc .gitversion
 	cd tests && $(MAKE) clean
 
 distclean: clean				## clean, plus the generated documentation
@@ -253,4 +343,5 @@ distclean: clean				## clean, plus the generated documentation
 
 
 .PHONY: all static shared featurecheck check check-gpio doc install \
-	uninstall clean distclean version features sources help
+	uninstall clean distclean version version-full tag features sources \
+	help

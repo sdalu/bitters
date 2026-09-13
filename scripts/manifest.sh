@@ -1,5 +1,6 @@
 #!/bin/sh
-# Read bitters.cmake, which is the one place the file list lives.
+# Read bitters.cmake, which is the one place the file list lives, and
+# include/bitters/version.h, which is the one place the release is written.
 #
 # CMake consumers include it directly. The Makefile cannot, so it asks
 # here instead -- `SRC != sh scripts/manifest.sh sources` and so on --
@@ -47,6 +48,26 @@ cmvar() {
     ' "$cm"
 }
 
+# The release, from include/bitters/version.h. It is written there rather
+# than here because a C header can read no other file: a consumer must have
+# the version without running anything, so the header is where it lives and
+# this is one of the two readers (bitters.cmake parses the same three lines).
+hdrversion() {
+    h="$top/$(cmvar BITTERS_INCLUDE_DIR)/bitters/version.h"
+    awk '
+	/^#define[ \t]+BITTERS_VERSION_MAJOR[ \t]/ { maj = $3 }
+	/^#define[ \t]+BITTERS_VERSION_MINOR[ \t]/ { min = $3 }
+	/^#define[ \t]+BITTERS_VERSION_PATCH[ \t]/ { pat = $3 }
+	END {
+	    if (maj == "" || min == "" || pat == "") exit 1
+	    print maj "." min "." pat
+	}
+    ' "$h" || {
+	echo "manifest: no version in $h" >&2
+	exit 1
+    }
+}
+
 # set(BITTERS_SOURCES_GPIO ...) for part gpio. An unknown part gives an
 # empty answer rather than an error, which the checks turn into a message.
 partvar() {
@@ -62,7 +83,7 @@ what=$1
 [ $# -gt 0 ] && shift
 
 case $what in
-version)    cmvar BITTERS_VERSION ;;
+version)    hdrversion ;;
 incdir)     cmvar BITTERS_INCLUDE_DIR ;;
 subsystems) cmvar BITTERS_SUBSYSTEMS ;;
 parts)      echo $PARTS ;;

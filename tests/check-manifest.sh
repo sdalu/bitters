@@ -1,9 +1,13 @@
 #!/bin/sh
 # bitters.cmake is the manifest: the Makefile reads it through
-# scripts/manifest.sh, and CMake consumers include it. There is no second
-# copy to compare it against any more -- what is left to check is that it
-# still describes the tree, and that nothing has quietly gone back to
-# keeping its own list. Run by `make check`.
+# scripts/manifest.sh, and CMake consumers include it. The release is the
+# same arrangement one file over -- written in include/bitters/version.h,
+# because a C header can read no other file, and parsed from there by
+# bitters.cmake and by manifest.sh. There is no second copy of either to
+# compare against any more -- what is left to check is that they still
+# describe the tree, that the two parses of the version agree with the
+# compiler's, and that nothing has quietly gone back to keeping its own
+# list. Run by `make check`.
 set -e
 top=`dirname "$0"`/..
 m="sh $top/scripts/manifest.sh"
@@ -17,6 +21,47 @@ version=`$m version`
 case $version in
     [0-9]*.[0-9]*) ;;
     *) echo "  version is not a version: '$version'"; bad=1 ;;
+esac
+
+# --- and the compiler reads the same version --------------------------
+# The manifest parses version.h with awk and bitters.cmake with a regex,
+# but what a consumer actually gets is what the *preprocessor* makes of
+# it. Ask it, so that a second #define, a comment in the wrong place or a
+# clever macro cannot make the two disagree.
+cc=${CC:-cc}
+cppversion=$(printf '#include <bitters/version.h>\nBITTERS_VERSION_STRING\n' \
+	    | $cc -E -I"$top/include" -x c - 2>/dev/null \
+	    | tr -d '" \t' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | tail -n 1)
+if [ -z "$cppversion" ]; then
+    echo "  version: the preprocessor makes nothing of BITTERS_VERSION_STRING"
+    bad=1
+elif [ "$cppversion" != "$version" ]; then
+    echo "  version: the manifest says $version, the preprocessor $cppversion"
+    bad=1
+fi
+
+# --- and the tags say the same thing ----------------------------------
+# The header is one half of naming a release; `git tag` is the other, and
+# nothing in the tree makes them agree. `make tag` makes the tag from the
+# header so that they cannot disagree, but a tag made by hand can, and a
+# release build has no later chance to notice. Silent when there is no git,
+# or when the repository around this tree is somebody else's.
+if out=$(sh "$top/scripts/checktag.sh" "$version"); then
+    :
+else
+    echo "$out"
+    bad=1
+fi
+
+# --- the git part, when there is one ----------------------------------
+# It is appended to the release, so it has to be an addition and not a
+# replacement: SemVer build metadata, starting with '+'. Empty is the
+# right answer for a release, a tarball, or a vendored tree.
+gitver=$(sh "$top/scripts/gitversion.sh")
+case $gitver in
+    "") ;;
+    +*) ;;
+    *) echo "  git part does not start with '+': '$gitver'"; bad=1 ;;
 esac
 
 incdir=`$m incdir`
@@ -67,6 +112,36 @@ for s in `$m subsystems`; do
 	bad=1; }
 done
 
+# --- every public header is installed ---------------------------------
+# The Makefile names them (HEADERS and SUBHEADERS) because install(1)
+# needs the list; a new public header nobody added there compiles here and
+# is simply missing from the installed tree, where the consumer who
+# notices is somebody else.
+# $( ) and not backticks on purpose: backticks would eat one level of
+# backslashes on the way in, and this awk program is made of them -- the
+# continuation test would arrive as /$/ and match nothing.
+installed=$(awk '
+	/^HEADERS|^SUBHEADERS/ { inlist = 1 }
+	inlist {
+	    cont = ($0 ~ /\\$/)
+	    sub(/\\$/, "")
+	    for (i = 1; i <= NF; i++)
+		if ($i ~ /\.h$/)
+		    print $i
+	    if (!cont)
+		inlist = 0
+	}
+    ' "$top/Makefile")
+for f in "$top"/include/*.h "$top"/include/bitters/*.h; do
+    base=${f#"$top/"}
+    case "
+$installed" in
+	*"
+$base"*) ;;
+	*) echo "  $base exists but the Makefile does not install it"; bad=1 ;;
+    esac
+done
+
 # --- nothing keeps its own copy ---------------------------------------
 # The Makefile used to hold the whole list, and tests/check-cmake.sh
 # existed to notice when the two disagreed. It reads the manifest now;
@@ -76,8 +151,12 @@ if grep -q '^[A-Z_]* *= *src/' "$top/Makefile"; then
     bad=1
 fi
 
+# Counted with awk rather than `echo $parts | wc -w`, which would need the
+# expansion left unquoted in order to split.
+nparts=$(printf '%s\n' "$parts" | awk '{print NF}')
+
 if [ $bad -eq 0 ]; then
-    echo "manifest: $version, `echo $parts | wc -w | tr -d ' '` parts, all present"
+    echo "manifest: $version$gitver, $nparts parts, all present"
 else
     echo "manifest: BROKEN"
 fi

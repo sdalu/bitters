@@ -140,7 +140,10 @@ It sets variables rather than defining a target, so you can compile
 bitters differently for different targets -- giving only your threaded
 program `BITTERS_WITH_THREADS`, say -- and leave out a subsystem you do
 not use, through `BITTERS_SOURCES_CORE`, `_GPIO`, `_SPI`, `_I2C` and
-`_DELAY`. It also sets `BITTERS_VERSION`.
+`_DELAY`. It also sets `BITTERS_VERSION`, which it reads from
+`include/bitters/version.h` -- the release, since a source list cannot
+honestly claim to be more than that; a tree built between releases says so
+through `bitters_version()` at run time.
 
 Any combination links: the subsystems never reach into one another, and
 `CORE` reaches into the ones the build says it has, so `CORE` alone links
@@ -182,6 +185,84 @@ turns warnings into errors, which is what CI should use. Those warning
 flags are applied by the Makefile itself rather than through `CFLAGS`,
 because BSD make predefines `CFLAGS` and they would otherwise be dropped
 there; `CFLAGS` remains yours to set.
+
+### Version
+
+`bitters/version.h` carries the release, and is the one place it is
+written -- a C header can read no other file, so a consumer must be able
+to have the version without running anything. `bitters.cmake` parses those
+three lines for `BITTERS_VERSION`, and the Makefile asks
+`scripts/manifest.sh`, which parses them too, so `make version`,
+`bitters.pc` and the soname cannot disagree with the header.
+
+```c
+#include <bitters/version.h>
+
+#if !BITTERS_VERSION_AT_LEAST(1, 1, 0)
+#error bitters 1.1.0 or newer is required
+#endif
+
+printf("built against %s, running against %s\n",
+       BITTERS_VERSION_STRING, bitters_version());
+```
+
+| **Macro / call** | **What it says** |
+|---|---|
+| `BITTERS_VERSION_MAJOR` / `_MINOR` / `_PATCH` | the release, as numbers |
+| `BITTERS_VERSION_STRING` | the release, as `"1.1.1"` |
+| `BITTERS_VERSION_NUMBER` | the release as one comparable integer -- 1.2.3 is `10203` |
+| `BITTERS_VERSION_AT_LEAST(maj, min, pat)` | for `#if` |
+| `bitters_version()` | what the library you linked against is, at run time |
+
+The macros answer for the **headers**, which is what a `#if` can answer
+for. `bitters_version()` answers for the **library**, which for a shared
+one is only settled when it is loaded -- and the two differ exactly when
+the library was replaced underneath you.
+
+`bitters_version()` also carries the part that no file holds: which commit
+a build made between releases came from. A release reports the release
+alone, `1.1.1`, and anything else appends SemVer build metadata --
+`1.1.1+3.gae9c67b`, three commits past the tag, plus `.dirty` if the
+worktree had uncommitted changes. `make version` prints the release and
+`make version-full` prints what this tree builds as, the two being equal
+exactly when it is a release tree.
+
+The git part is worked out by `scripts/gitversion.sh` and compiled in
+(`-DBITTERS_VERSION_GIT`); the release alone goes into the soname and into
+`bitters.pc`, which name a release and nothing else. Nothing is added when
+the answer would be somebody else's: a tarball has no repository, and a
+tree vendored inside another project's repository would otherwise be
+reporting *that* project's tags and dirt as bitters'. An empty answer is
+never wrong, only less precise -- it says "the release these files say it
+is", which is what a tarball is.
+
+Bumping a release is editing the three numbers in
+`include/bitters/version.h`, committing, and `make tag`, which reads the
+number out of the header rather than having it typed again -- so the tag
+and the header cannot end up saying different things. It refuses on an
+uncommitted worktree or an existing tag, and pushes nothing.
+
+```sh
+$EDITOR include/bitters/version.h    # the three numbers
+git commit -am 'Bump the version to 1.1.2.'
+make tag                             # v1.1.2, from the header
+git push origin v1.1.2
+```
+
+`make tag` refuses an unclean worktree or an existing tag, then asks, then
+runs the whole check suite before it tags — so declining costs nothing and
+nothing gets tagged that the suite has not passed. `YES=1` answers yes for
+a script; a non-interactive run without it declines.
+
+A tag made by hand can still disagree, so `make check` gates the other
+direction (`scripts/checktag.sh`): on a tag with a clean worktree -- a
+release build, which has no later chance to be wrong -- the header must
+say what the tag says, and anywhere else it must be at or ahead of the
+nearest tag. Bumped-but-not-yet-tagged is the normal state between
+releases and passes; behind a tag that exists does not. It says nothing at
+all where the answer would be somebody else's: no git, a tarball, or a
+tree vendored inside another project's repository.
+
 
 Feature selection is done on the `make` command line; `make help` lists
 the flags with their current values, and `make features` reports what a
@@ -313,6 +394,7 @@ call -- see [Vendoring](#vendoring) above.
 |-----------------------------|----------------------------------------------------------|
 | `bitters_init()`            | Initialize the library (all subsystems present)           |
 | `bitters_reduced_latency()` | Reduce IO latency (raise scheduling priority, lock pages in memory) |
+| `bitters_version()`         | The version of the library actually linked against ([Version](#version)) |
 
 
 GPIO

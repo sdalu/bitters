@@ -45,7 +45,9 @@ What each test pins down
 | `t_spi_args` | SPI argument validation — the `SPI_IOC_MESSAGE` 14-bit count bound (511 passes, 512 does not), the 32-bit `len` field, `set_speed`/`set_wordsize`, and the enable/truncation error paths. Touches no SPI bus |
 | `t_i2c_args` | I2C argument validation — `I2C_RDWR_IOCTL_MAX_MSGS`, the 16-bit `len` field, the direction switch (neither/both rejected), and the enable/truncation error paths. Touches no I2C bus |
 | `t_delay` | a delay being cut short by an ordinary signal, and the signal mask not being restored afterwards |
-| `check-cmake.sh` | `bitters.cmake` drifting from the Makefile: it repeats the source list and the version, and two copies drift |
+| `t_version` | the two version answers coming apart: `BITTERS_VERSION_STRING` (the headers, settled when the caller compiled) against `bitters_version()` (the library, which carries the git part of a build made between releases). Built the way the difference really arises — the library half gets a `-DBITTERS_VERSION_GIT`, the consumer half does not — so a leak of the macro into a consumer's view, or a lost git part, fails here |
+| `check-manifest.sh` | `bitters.cmake` and `include/bitters/version.h` no longer describing the tree: a part or a source missing from one of them, an ungated subsystem, a public header the Makefile does not install, the awk parse of the version disagreeing with what the *preprocessor* makes of it, or the Makefile going back to keeping its own source list |
+| `check-subset.sh` | the vendoring subsets in `bitters.cmake` and the README: each one has to link, and a call into a subsystem that was not named has to be refused at compile time |
 | `t_i2c_endian` | the `read`/`write` bitfield view of `dir` matching the transfer constants |
 
 `support/` holds `LD_PRELOAD` interposers used to reach failure paths the

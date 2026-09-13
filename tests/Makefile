@@ -27,7 +27,7 @@ GPIOSRC  = ../src/gpio.c
 # t_init_repeat is built WITHOUT -DNDEBUG on purpose: it checks that a
 # repeated bitters_gpio_init() does not trip the assertion.
 # t_pins_dangling #includes ../src/gpio.c itself, for the private struct.
-PLAIN   = t_i2c_endian t_delay t_spi_args t_i2c_args t_spi_bufsize
+PLAIN   = t_i2c_endian t_delay t_spi_args t_i2c_args t_spi_bufsize t_version
 GPIO    = t_init_repeat t_irq_delivery t_irq_sibling_reconfig t_pins_dangling \
           t_race_after t_race_enable t_lock_stress t_errno t_c8 t_starvation \
           t_soak t_allocfail t_cross_teardown t_irq_wait t_pin_rw
@@ -43,6 +43,17 @@ all: $(PLAIN) $(GPIO) $(SUPPORT)
 	$(CC) $(ALL_CFLAGS) $(CPPFLAGS) -DNDEBUG -o $@ $< $(GPIOSRC) $(LDLIBS)
 
 # and the exceptions
+# Built the way the difference it tests really arises: the library half
+# gets a git part, the consumer half does not (and names no subsystem, so
+# bitters.c links alone). $(CPPFLAGS) is not used here for that reason.
+GITFAKE = +7.gdeadbee
+t_version: t_version.c ../src/bitters.c ../include/bitters/version.h
+	$(CC) $(ALL_CFLAGS) -D_GNU_SOURCE -I../include \
+	    -DBITTERS_VERSION_GIT='"$(GITFAKE)"' -c -o bitters_version.o \
+	    ../src/bitters.c
+	$(CC) $(ALL_CFLAGS) -D_GNU_SOURCE -I../include \
+	    -DBH_EXPECT_GIT='"$(GITFAKE)"' -o $@ t_version.c bitters_version.o
+
 t_i2c_endian: t_i2c_endian.c
 	$(CC) $(ALL_CFLAGS) $(CPPFLAGS) -o $@ t_i2c_endian.c
 
@@ -75,6 +86,7 @@ t_pins_dangling: t_pins_dangling.c $(GPIOSRC)
 check: $(PLAIN)
 	@sh ./check-manifest.sh
 	@sh ./check-subset.sh
+	@./t_version
 	@BITTERS_SILENCE_WARNING=1 ./t_i2c_endian
 	@BITTERS_SILENCE_WARNING=1 ./t_delay
 	@BITTERS_SILENCE_WARNING=1 ./t_spi_args

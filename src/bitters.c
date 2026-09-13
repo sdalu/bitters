@@ -14,6 +14,7 @@
 #endif
 
 #include "bitters.h"
+#include "bitters/version.h"
 #include "bitters/gpio.h"
 #include "bitters/spi.h"
 #include "bitters/i2c.h"
@@ -27,6 +28,19 @@
  * here is a reference that drags the source in whether or not the call
  * ever runs.
  */
+
+/* What this library is, as opposed to what the caller's headers said it
+ * was. Both halves come from include/bitters/version.h: the release is
+ * written there, and the git part is empty there and passed on the
+ * command line by the Makefile, so a build between releases reports the
+ * commit it was made from and a release reports the release alone.
+ */
+const char *
+bitters_version(void)
+{
+    return BITTERS_VERSION_STRING BITTERS_VERSION_GIT;
+}
+
 
 int
 bitters_init(void)

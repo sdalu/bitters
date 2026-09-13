@@ -7,7 +7,11 @@
 # different targets (give only your threaded program BITTERS_WITH_THREADS)
 # and leave out a subsystem you do not use.
 #
-#   BITTERS_VERSION          the release this tree is
+#   BITTERS_VERSION          the release this tree is (from
+#                            include/bitters/version.h, which is where it
+#                            is written; bitters_version() at run time
+#                            adds the commit a between-releases build
+#                            was made from)
 #   BITTERS_INCLUDE_DIR      add to your include path
 #   BITTERS_SOURCES          every source
 #   BITTERS_SOURCES_CORE     bitters_init(), bitters_reduced_latency()
@@ -72,7 +76,39 @@
 # This file is for vendored trees. Installing bitters gives you a
 # pkg-config file instead; see the README.
 
-set(BITTERS_VERSION       1.1.1)
+set(BITTERS_INCLUDE_DIR   ${CMAKE_CURRENT_LIST_DIR}/include)
+
+# The release, read from include/bitters/version.h rather than written
+# here. That header is the one place it lives, because a C header can read
+# no other file and a consumer must have the version without running
+# anything -- so the header holds it and everyone else parses it: this
+# file, and scripts/manifest.sh for the Makefile. Nothing keeps a second
+# copy, so there is no second copy to drift.
+#
+# BITTERS_VERSION is the release, and a release is all a source list can
+# honestly claim to be: a tree built between releases says so through
+# bitters_version() at run time, which carries the commit it was built
+# from. Your git tree is yours, not bitters'.
+file(STRINGS ${BITTERS_INCLUDE_DIR}/bitters/version.h _bitters_version_lines
+     REGEX "^#define[ \t]+BITTERS_VERSION_(MAJOR|MINOR|PATCH)[ \t]+[0-9]+")
+foreach(_line IN LISTS _bitters_version_lines)
+    string(REGEX MATCH "BITTERS_VERSION_([A-Z]+)[ \t]+([0-9]+)" _m "${_line}")
+    set(_bitters_v_${CMAKE_MATCH_1} ${CMAKE_MATCH_2})
+endforeach()
+if(NOT DEFINED _bitters_v_MAJOR OR
+   NOT DEFINED _bitters_v_MINOR OR
+   NOT DEFINED _bitters_v_PATCH)
+    message(FATAL_ERROR
+	"bitters: no version in ${BITTERS_INCLUDE_DIR}/bitters/version.h")
+endif()
+set(BITTERS_VERSION
+    ${_bitters_v_MAJOR}.${_bitters_v_MINOR}.${_bitters_v_PATCH})
+unset(_bitters_version_lines)
+unset(_line)
+unset(_m)
+unset(_bitters_v_MAJOR)
+unset(_bitters_v_MINOR)
+unset(_bitters_v_PATCH)
 
 # The subsystems bitters_init() brings up, and so the ones whose headers
 # are gated by BITTERS_WITH_<SUBSYSTEM>. CORE and DELAY have no gate:
@@ -81,8 +117,6 @@ set(BITTERS_SUBSYSTEMS    gpio i2c spi)
 
 # What a hosted link needs, given BITTERS_WITH_THREADS.
 set(BITTERS_LIBS          pthread)
-
-set(BITTERS_INCLUDE_DIR   ${CMAKE_CURRENT_LIST_DIR}/include)
 
 set(BITTERS_SOURCES_CORE  ${CMAKE_CURRENT_LIST_DIR}/src/bitters.c)
 set(BITTERS_SOURCES_DELAY ${CMAKE_CURRENT_LIST_DIR}/src/delay.c)
