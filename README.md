@@ -428,6 +428,30 @@ It needs to be configured at boot time, using either
 	 Example for pull up: adding entry `gpio=_pin-list_=pu`
 * device-tree
 
+### Naming the controller
+
+A pin's controller is resolved when the pin is first enabled, and is one
+of, or several separated by `|` and tried in order:
+
+* a device name under `/dev`, such as `gpiochip0`;
+* a chip label, such as `pinctrl-rp1`: what the driver calls the chip,
+  and what `gpiodetect` prints in brackets. The lowest-numbered chip
+  carrying it is taken.
+
+A device number is assigned at probe and is not the same on every board
+or kernel; a label names the silicon, and a list of labels names a family
+of boards. A label and the device name it stands for share one controller,
+and a name that resolves to nothing fails the enable with `-ENOENT`.
+
+### Active low
+
+`active_low` in `bitters_gpio_cfg_t` says the line's active state is
+physical low: a relay board that closes on a low input, an open-collector
+sensor. Everything the API then says about the pin is logical -- a `1`
+written, read or given as `defval` is the line low, a rising edge is the
+line going low -- and the kernel does the inversion. It is said once, at
+enable, instead of at every read and write.
+
 ### Raspberry Pi pin names
 
 `bitters/rpi.h` names the 40-pin header so you need not hard-code numbers:
@@ -462,9 +486,16 @@ BCM line, `BITTERS_RPI_SPI0_MOSI` and friends for the peripherals, and
   └────────────────────────┴────┴────┴────────────────────────┘
 ```
 
-The chip is named `gpiochip0`, which is right for the Pi 1 through 4; the
-Pi 5 moved the header GPIO to its RP1 southbridge and needs a different
-controller.
+`BITTERS_RPI_GPIO_CHIP` names the header bank by the label its pinctrl
+driver gives the chip -- `pinctrl-rp1` on a Pi 5, `pinctrl-bcm2711` on a
+Pi 4, `pinctrl-bcm2835` before that -- rather than by device number,
+which is assigned at probe and moved when the Pi 5 put the header on its
+RP1 southbridge. The alternatives are tried in order and `gpiochip0` is
+the last of them, so a chip none of the labels match behaves as every
+earlier release did. The line offsets are the same on all of them. The
+macro is defined only if it is not already, so a build that knows better
+can say so on the compiler command line, as a string literal:
+`-DBITTERS_RPI_BCM_GPIO_CHIP='"gpiochip4"'`.
 
 
 ### API Functions

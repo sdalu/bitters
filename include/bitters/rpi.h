@@ -10,8 +10,32 @@
 
 
 /* Raspberry Pi BCM
+ *
+ * The header GPIO bank is named by the label its pinctrl driver gives the
+ * chip, not by device number: the number is assigned at probe and is not
+ * the same on every model or kernel -- the Pi 5 moved the header to the
+ * RP1 southbridge -- while the label names the silicon. bitters tries the
+ * alternatives in order (see ctrl_devname in <bitters/gpio.h>); the last
+ * is the device name every earlier release used, so a chip none of the
+ * labels match behaves as before. The line offsets below are the same on
+ * all of them.
+ *
+ * Defined only if it is not already, so a build can say which chip it
+ * means on the compiler command line, as a string literal:
+ *
+ *     -DBITTERS_RPI_BCM_GPIO_CHIP='"gpiochip4"'
  */
-#define BITTERS_RPI_BCM_GPIO_CHIP	"gpiochip0"
+#define BITTERS_RPI_GPIO_LABEL_BCM2835	"pinctrl-bcm2835"	// Pi 1-3, Zero
+#define BITTERS_RPI_GPIO_LABEL_BCM2711	"pinctrl-bcm2711"	// Pi 4
+#define BITTERS_RPI_GPIO_LABEL_RP1	"pinctrl-rp1"		// Pi 5
+
+#ifndef BITTERS_RPI_BCM_GPIO_CHIP
+#define BITTERS_RPI_BCM_GPIO_CHIP					\
+    BITTERS_RPI_GPIO_LABEL_RP1     "|"					\
+    BITTERS_RPI_GPIO_LABEL_BCM2711 "|"					\
+    BITTERS_RPI_GPIO_LABEL_BCM2835 "|"					\
+    "gpiochip0"
+#endif
 
 #define BITTERS_RPI_BCM_GPIO_0		0
 #define BITTERS_RPI_BCM_GPIO_1		1

@@ -29,6 +29,8 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <dirent.h>
+#include <limits.h>
 #include <sys/ioctl.h>
 #include <fcntl.h>
 #include <poll.h>
@@ -97,6 +99,13 @@
 
 
 /*== Macros ============================================================*/
+
+/* Longest controller device name (an entry under /dev) handled,
+ * NUL included */
+#define BITTERS_GPIO_DEVNAME_SIZE	256
+
+/* Separates the alternatives of a controller name, tried in order */
+#define BITTERS_GPIO_CTRL_ALT		'|'
 
 #define BITTERS_GPIO_ENSURE_INTERRUPT_PIN(pin)				\
     do {								\
@@ -369,6 +378,108 @@ bitters_gpio_irq_processing(void *args) {
 }
 #endif
 
+/* The device (gpiochipN) whose chip label is the given one -- the label
+ * being what the driver calls the chip, as GPIO_GET_CHIPINFO_IOCTL reports
+ * it. Where several chips carry it the lowest-numbered wins, so the
+ * answer does not depend on directory order.
+ *
+ * Returns 0 with devname filled in, -ENOENT when no chip carries the
+ * label, or -errno from the scan itself.
+ */
+static int
+_bitters_gpio_ctrl_resolve_label(const char *label, size_t len,
+				 char *devname, size_t size)
+{
+    DIR           *dir;
+    struct dirent *ent;
+    unsigned long  best = ULONG_MAX;
+
+    dir = opendir("/dev");
+    if (dir == NULL)
+	return -errno;
+
+    while ((ent = readdir(dir)) != NULL) {
+	char *end;
+	if (strncmp(ent->d_name, "gpiochip", 8) != 0)
+	    continue;
+	unsigned long num = strtoul(ent->d_name + 8, &end, 10);
+	if ((end == ent->d_name + 8) || (*end != '\0') || (num >= best))
+	    continue;
+
+	char path[sizeof("/dev/") + sizeof(ent->d_name)];
+	snprintf(path, sizeof(path), "/dev/%s", ent->d_name);
+	int fd = open(path, O_RDONLY | O_CLOEXEC);
+	if (fd < 0)
+	    continue;
+	struct gpiochip_info info;
+	int rc = ioctl(fd, GPIO_GET_CHIPINFO_IOCTL, &info);
+	close(fd);
+	if ((rc == 0) &&
+	    (strnlen(info.label, sizeof(info.label)) == len) &&
+	    (strncmp(info.label, label, len) == 0))
+	    best = num;
+    }
+    closedir(dir);
+
+    if (best == ULONG_MAX)
+	return -ENOENT;
+    if (snprintf(devname, size, "gpiochip%lu", best) >= (int)size)
+	return -ENAMETOOLONG;
+    return 0;
+}
+
+
+/* Resolve a controller name, as a pin gives it, to a device name.
+ *
+ * Each alternative -- the name, or the parts of it separated by '|',
+ * taken in order -- is first an entry under /dev, and if there is none
+ * of that name, a chip label. The first that names something wins.
+ * Device numbers are assigned at probe and are not the same on every
+ * board or kernel; a label names the silicon, and a list of them names
+ * a family of boards. An empty alternative is skipped.
+ *
+ * Returns 0 with devname filled in, or the failure of the last
+ * alternative tried: -ENOENT when it named nothing.
+ */
+static int
+_bitters_gpio_ctrl_resolve(const char *spec, char *devname, size_t size)
+{
+    int rc = -ENOENT;
+
+    for (const char *alt = spec ; alt != NULL ; ) {
+	const char *sep  = strchr(alt, BITTERS_GPIO_CTRL_ALT);
+	const char *next = sep ? sep + 1 : NULL;
+	size_t      len  = sep ? (size_t)(sep - alt) : strlen(alt);
+
+	if (len == 0) {
+	    alt = next;
+	    continue;
+	}
+
+	// A device under /dev
+	if (len < size) {
+	    char        path[sizeof("/dev/") + BITTERS_GPIO_DEVNAME_SIZE];
+	    struct stat st;
+	    snprintf(path, sizeof(path), "/dev/%.*s", (int)len, alt);
+	    if (stat(path, &st) == 0) {
+		memcpy(devname, alt, len);
+		devname[len] = '\0';
+		return 0;
+	    }
+	}
+
+	// A chip label
+	rc = _bitters_gpio_ctrl_resolve_label(alt, len, devname, size);
+	if (rc == 0)
+	    return 0;
+
+	alt = next;
+    }
+
+    return rc;
+}
+
+
 static struct bitters_gpio_ctrl *
 _bitters_gpio_ctrl_create(const char *devname)
 {
@@ -493,13 +604,27 @@ _bitters_gpio_pin_associate_ctrl(bitters_gpio_pin_t *pin)
 {
     int                       rc      = -EINVAL;
     struct bitters_gpio_ctrl *ctrl    = NULL;
+    char                      devname[BITTERS_GPIO_DEVNAME_SIZE];
+
+    /* Resolve the controller name to a device
+     *  (outside the lock: it may scan /dev, and needs nothing shared)
+     */
+    rc = _bitters_gpio_ctrl_resolve(pin->ctrl_devname,
+				    devname, sizeof(devname));
+    if (rc < 0) {
+	BITTERS_GPIO_LOG("no gpio controller matches %s (%s)",
+			 pin->ctrl_devname, strerror(-rc));
+	return rc;
+    }
 
     BITTERS_GPIO_CTRLS_LOCK();
 
     /* Lookup for existing controller
+     *  (by the device it resolved to, so a label and the device name it
+     *   stands for share one controller)
      */
     for (ctrl =  LIST_FIRST(&bitters_gpio_ctrls) ; ctrl ; ctrl = LIST_NEXT(ctrl, entries)) {
-	if (! strcmp(ctrl->name, pin->ctrl_devname)) {
+	if (! strcmp(ctrl->name, devname)) {
 	    BITTERS_GPIO_LOG("found instanciated gpio controller (%s)",
 			     ctrl->name);
 	    goto associate;
@@ -508,7 +633,7 @@ _bitters_gpio_pin_associate_ctrl(bitters_gpio_pin_t *pin)
 
     /* Create a new controller
      */
-    ctrl = _bitters_gpio_ctrl_create(pin->ctrl_devname);
+    ctrl = _bitters_gpio_ctrl_create(devname);
     if (ctrl == NULL) {
 	rc = -errno;
 	goto failed;
@@ -722,6 +847,11 @@ bitters_gpio_pin_enable(bitters_gpio_pin_t *pin, bitters_gpio_cfg_t *cfg)
 	rc = -EINVAL;
 	goto failed;
     }
+
+    // Active low, for either direction: the kernel then inverts the
+    // line, so values, default value and edges are all logical
+    if (cfg->active_low)
+	flags |= GPIO_V2_LINE_FLAG_ACTIVE_LOW;
 
     // Create gpio line request
     //  (unused config.attrs slots must stay zeroed:

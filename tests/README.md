@@ -50,6 +50,8 @@ What each test pins down
 | `t_soak` | descriptor leak and `O_NONBLOCK` restore over 400 enable/disable cycles |
 | `t_allocfail` | allocation-failure paths in controller creation leaking descriptors |
 | `t_pin_rw` | `pin_read()` / `pin_write()`: an input line driven from debugfs and read through the API, an output line written through the API and observed on the chip, including `defval` and a non-1 truth value |
+| `t_ctrl_lookup` | the controller name resolving to a device: a chip label (asked of the kernel, not assumed) enables a pin, a list of alternatives takes the first that exists, a name that is nothing fails with `-ENOENT`, a label and the device name it stands for share one controller, and the scan leaks no descriptor. The Pi 5 defect -- a fixed `gpiochip0` driving the wrong controller -- is what the label route exists for |
+| `t_active_low` | `cfg.active_low` inverting the line for both directions, read and write, `defval`, and the edges `irq_wait()` reports -- all logical, the debugfs line physical. Dropping the flag, or applying it to one direction only, fails here |
 | `t_spi_args` | SPI argument validation — the `SPI_IOC_MESSAGE` 14-bit count bound (511 passes, 512 does not), the 32-bit `len` field, `set_speed`/`set_wordsize`, and the enable/truncation error paths. Touches no SPI bus |
 | `t_i2c_args` | I2C argument validation — `I2C_RDWR_IOCTL_MAX_MSGS`, the 16-bit `len` field, the direction switch (neither/both rejected), and the enable/truncation error paths. Touches no I2C bus |
 | `t_delay` | a delay being cut short by an ordinary signal, and the signal mask not being restored afterwards |

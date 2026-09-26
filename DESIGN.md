@@ -130,6 +130,46 @@ warning -- the symbol resolved, the offsets did not. Do not make a public
 structure's layout conditional again.
 
 
+A controller is named by what the kernel reports
+------------------------------------------------
+
+`ctrl_devname` on a pin is a device name under `/dev`, or a chip label,
+or several of either separated by `|`, and the library resolves it to a
+device when the pin is first enabled. The reason is the Raspberry Pi 5:
+it moved the header GPIO to the RP1 southbridge, and a fixed `gpiochip0`
+-- which every earlier release wrote into `BITTERS_RPI_GPIO_CHIP` -- then
+drove the wrong controller. Device numbers are assigned at probe; the
+label is what the driver calls the chip and names the silicon, so a list
+of labels names a family of boards, and the Pi macro is now three labels
+with the old device name last.
+
+Two other shapes were rejected. A `bitters_rpi_gpio_chip()` function
+returning the device name cannot sit in a static initializer, which is
+how `BITTERS_GPIO_PIN_INITIALIZER` is meant to be used and how the Pi
+macro is used in the README; it would also have needed a source of its
+own for what is otherwise a header of numbers. Changing the field to an
+array of names would have changed the layout of `bitters_gpio_pin_t`,
+which is ABI (see below). A separator in the string keeps the field, the
+macro and every existing caller as they were.
+
+The resolved device name, not the name the pin gave, is what controllers
+are matched on, so a label and the device it stands for share one
+controller -- one descriptor, one interrupt thread. The resolution runs
+outside the controller lock: it may scan `/dev`, and needs nothing shared.
+
+
+Active low is a field, not a mode
+---------------------------------
+
+`active_low` is its own byte in `bitters_gpio_cfg_t`, appended so that
+positional initializers keep their meaning, and maps to the one kernel
+flag. It could have been a `BITTERS_GPIO_MODE_*` value, but mode is
+output-only in this API and active low applies to both directions;
+folding it in would have meant an input with a mode. The inversion is
+the kernel's, so read, write, `defval` and the reported edges are all
+logical with no code in bitters to keep consistent.
+
+
 One interrupt thread per gpiochip
 ---------------------------------
 

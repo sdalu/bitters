@@ -188,6 +188,13 @@ typedef void (*bitters_gpio_irq_cb_t)(struct bitters_gpio_pin *pin, void *args);
 
 /**
  * GPIO pin configuration.
+ *
+ * With @c active_low set the line's active state is physical low, and
+ * everything this API says about the pin is then logical: a value of 1
+ * written, read or given as @c defval is the line driven or seen low,
+ * and a rising edge is the line going low. The kernel does the
+ * inversion. It is the way to say how a relay board or an open-collector
+ * sensor is wired once, at enable, rather than at every read and write.
  */
 typedef struct bitters_gpio_cfg {
     const char *label;	/**< IO: informative label for system information */
@@ -197,15 +204,33 @@ typedef struct bitters_gpio_cfg {
     uint8_t  interrupt;	/**< I : interrupt processing 			  */
     uint32_t debounce;  /**< I : debounce for input, 0 = none             */
     int      defval;	/**<  O: default value when enabling output 	  */
+    uint8_t  active_low;/**< IO: 1 = active state is physical low	  */
 } bitters_gpio_cfg_t;
 
 
 /**
  * GPIO pin definition.
+ *
+ * The controller, @c ctrl_devname, is resolved to a device when the pin
+ * is first enabled. It is one of, or several separated by @c '|' and
+ * tried in order:
+ *
+ *  - a device name under @c /dev, such as @c "gpiochip0";
+ *  - a chip label, such as @c "pinctrl-rp1": what the driver calls the
+ *    chip, as @c gpiodetect prints it in brackets. The lowest-numbered
+ *    chip carrying it is taken.
+ *
+ * Device numbers are assigned at probe and are not the same on every
+ * board or kernel, where a label names the silicon; a list of labels
+ * names a family of boards. @c BITTERS_RPI_GPIO_CHIP in
+ * <bitters/rpi.h> is one. The first alternative that names something
+ * wins; a label and the device name it stands for share one controller.
+ * Enabling a pin whose controller names nothing fails with @c -ENOENT.
  */
 typedef struct bitters_gpio_pin {
     int   id;				/**< pin id			*/
-    const char *ctrl_devname;		/**< controller device name	*/
+    const char *ctrl_devname;		/**< controller: device name,
+					     chip label, or alternatives */
     /* private */
     uint8_t flags;			// Flags for configuration state
     struct bitters_gpio_ctrl *ctrl;	// Back pointer on controller
@@ -263,7 +288,8 @@ int bitters_gpio_pin_disable(bitters_gpio_pin_t *pin);
  * Read pin value.
  *
  * @param pin 		pin identification
- * @param value		pin value (0=low, 1=high)
+ * @param value		pin value (0=low, 1=high; inverted when the pin
+ *			was enabled with @c active_low)
  * @return < 0 in case of error (-errno)
  */
 
@@ -273,7 +299,8 @@ int bitters_gpio_pin_read(bitters_gpio_pin_t *pin, int *value);
  * Write value to the pin.
  *
  * @param pin 		pin identification
- * @param value		pin value (0=low, 1=high)
+ * @param value		pin value (0=low, 1=high; inverted when the pin
+ *			was enabled with @c active_low)
  * @return < 0 in case of error (-errno)
  */
 int bitters_gpio_pin_write(bitters_gpio_pin_t *pin, int value);
