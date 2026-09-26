@@ -103,6 +103,9 @@ tests-gpio: all
 	 if [ -z "$$chip" ]; then \
 	     echo "no gpio-mockup chip: modprobe gpio-mockup gpio_mockup_ranges=-1,8,-1,8" >&2; \
 	     exit 1; fi; \
+	 if [ ! -d /sys/kernel/debug/gpio-mockup/$$chip ]; then \
+	     echo "no /sys/kernel/debug/gpio-mockup/$$chip: mount -t debugfs none /sys/kernel/debug" >&2; \
+	     exit 1; fi; \
 	 if [ -n "$$chip2" ]; then echo "using virtual chip: $$chip and $$chip2"; \
 	 else echo "using virtual chip: $$chip  (only one: two-chip tests will skip)"; fi; \
 	 fail=0; \

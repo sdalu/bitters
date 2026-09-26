@@ -29,6 +29,12 @@ bitters' code; `tests` builds the test programs and runs them.
   exits 77 when there is no second mockup chip; the runner prints SKIP and
   still exits 0. Load the module with two ranges
   (`gpio_mockup_ranges=-1,8,-1,8`) and read the output, not the exit code.
+- **`make tests-gpio` needs debugfs mounted, and a stock Raspberry Pi OS
+  does not mount it.** The runner now refuses without it; running a test
+  binary by hand without it does not fail cleanly -- `t_pin_rw` reports
+  mismatches, `t_active_low` hangs in `irq_wait()` -- because the lines
+  are driven through `/sys/kernel/debug/gpio-mockup/`.
+  `mount -t debugfs none /sys/kernel/debug` first.
 - **Run a test binary by hand and it may look like it failed.**
   `tests/Makefile` sets `BITTERS_SILENCE_WARNING=1` for most of them;
   without it they print configuration warnings, which are not failures.

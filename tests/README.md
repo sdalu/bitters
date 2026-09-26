@@ -10,6 +10,7 @@ Running
 
     make tests                       # no privilege needed, touches no bus
     sudo modprobe gpio-mockup gpio_mockup_ranges=-1,8,-1,8
+    sudo mount -t debugfs none /sys/kernel/debug   # if not already mounted
     sudo make tests-gpio             # GPIO tests, on a *virtual* chip
     sudo rmmod gpio-mockup
     make tests-endian                # i2c bitfield on other-endian ABIs
@@ -20,8 +21,11 @@ and `check-subset.sh`, both in this directory — belongs to `make check`,
 which is a different phase and a different question.
 
 The GPIO tests drive `gpio-mockup`, a kernel-provided virtual gpiochip
-whose lines are driven from `/sys/kernel/debug/gpio-mockup/`. They never
-touch real hardware. `make tests-gpio` finds the mockup chip itself, by
+whose lines are driven from `/sys/kernel/debug/gpio-mockup/`, so debugfs
+has to be mounted -- a stock Raspberry Pi OS does not -- and the runner
+refuses to start without it, because a test that cannot drive its line
+does not fail: `t_pin_rw` reports mismatches and `t_active_low` waits for
+an edge that never comes. They never touch real hardware. `make tests-gpio` finds the mockup chip itself, by
 asking `gpiodetect`, and hands it to each test as `BH_CHIP` — and a second
 one, where there is one, as `BH_CHIP2`. There is no override: to run
 against a particular chip, set those in the environment and run the test
