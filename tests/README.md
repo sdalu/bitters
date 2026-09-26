@@ -8,18 +8,26 @@ worth keeping: the input is known and it demonstrably failed once.
 Running
 -------
 
-    make check                       # no privilege needed, touches no bus
+    make tests                       # no privilege needed, touches no bus
     sudo modprobe gpio-mockup gpio_mockup_ranges=-1,8,-1,8
-    sudo make check-gpio             # GPIO tests, on a *virtual* chip
+    sudo make tests-gpio             # GPIO tests, on a *virtual* chip
     sudo rmmod gpio-mockup
-    make endian                      # i2c bitfield on other-endian ABIs
+    make tests-endian                # i2c bitfield on other-endian ABIs
+
+They run from the top of the tree under the same names, and they are the
+suite. The preflight that runs none of bitters' code — `check-manifest.sh`
+and `check-subset.sh`, both in this directory — belongs to `make check`,
+which is a different phase and a different question.
 
 The GPIO tests drive `gpio-mockup`, a kernel-provided virtual gpiochip
 whose lines are driven from `/sys/kernel/debug/gpio-mockup/`. They never
-touch real hardware. `make check-gpio` finds the mockup chip itself;
-override with `make check-gpio CHIP=gpiochip2`.
+touch real hardware. `make tests-gpio` finds the mockup chip itself, by
+asking `gpiodetect`, and hands it to each test as `BH_CHIP` — and a second
+one, where there is one, as `BH_CHIP2`. There is no override: to run
+against a particular chip, set those in the environment and run the test
+binary directly.
 
-`make check-gpio` reports PASS/FAIL per test; a non-zero exit means at
+`make tests-gpio` reports PASS/FAIL per test; a non-zero exit means at
 least one failed.
 
 What each test pins down
@@ -46,8 +54,9 @@ What each test pins down
 | `t_i2c_args` | I2C argument validation — `I2C_RDWR_IOCTL_MAX_MSGS`, the 16-bit `len` field, the direction switch (neither/both rejected), and the enable/truncation error paths. Touches no I2C bus |
 | `t_delay` | a delay being cut short by an ordinary signal, and the signal mask not being restored afterwards |
 | `t_version` | the two version answers coming apart: `BITTERS_VERSION_STRING` (the headers, settled when the caller compiled) against `bitters_version()` (the library, which carries the git part of a build made between releases). Built the way the difference really arises — the library half gets a `-DBITTERS_VERSION_GIT`, the consumer half does not — so a leak of the macro into a consumer's view, or a lost git part, fails here |
-| `check-manifest.sh` | `bitters.cmake` and `include/bitters/version.h` no longer describing the tree: a part or a source missing from one of them, an ungated subsystem, a public header the Makefile does not install, the awk parse of the version disagreeing with what the *preprocessor* makes of it, or the Makefile going back to keeping its own source list |
+| `check-manifest.sh` | `bitters.cmake` and `include/bitters/version.h` no longer describing the tree: a part or a source missing from one of them, an ungated subsystem, a public header the Makefile does not install, either parse of the version — the manifest's awk and `bitters.cmake`'s own regex, the latter asked through `cmake` — disagreeing with what the *preprocessor* makes of it, or the Makefile going back to keeping its own source list |
 | `check-subset.sh` | the vendoring subsets in `bitters.cmake` and the README: each one has to link, and a call into a subsystem that was not named has to be refused at compile time |
+| `check-features.sh` | `make features` no longer being the interface the README documents: output that is not shell, either name gone from it, a name `make sources` already claims, flags that do not move when a knob is turned off, or a comment line that does not replay to the same answer |
 | `t_i2c_endian` | the `read`/`write` bitfield view of `dir` matching the transfer constants |
 
 `support/` holds `LD_PRELOAD` interposers used to reach failure paths the
@@ -59,7 +68,8 @@ Not covered here
 ----------------
 
 * Big-endian behaviour is checked by inspecting cross-compiled codegen
-  (`make endian`), not by running — no big-endian host was available.
+  (`make tests-endian`), not by running — no big-endian host was
+  available.
 * A real SPI or I2C **data transfer** is never executed: that would mean
   driving a live bus, which on a development board may have hardware
   attached. `t_spi_args` and `t_i2c_args` cover every path that returns

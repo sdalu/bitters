@@ -127,13 +127,26 @@ else
 fi
 
 # ... and bitters.pc is what hands them to a consumer of an installed
-# library, which cannot know the source list because it did not pick one
-if grep -q 'Cflags:.*$(SUBSYSTEMS)' "$top/Makefile"; then
-    n=`sed -n 's/^SUBSYSTEMS *= *//p' "$top/Makefile" | wc -w | tr -d ' '`
-    printf '  %-40s %s flags\n' "bitters.pc exports them" "$n"
-else
+# library, which cannot know the source list because it did not pick one.
+#
+# Two halves, and both are asserted: the .pc recipe still puts
+# $(SUBSYSTEMS) into Cflags, and $(SUBSYSTEMS) is still one gate per
+# subsystem rather than the empty string. Reading the count off the
+# Makefile line is what this used to do, and it printed 0 from the day
+# that assignment became `!=` -- a number nobody compared against
+# anything, which is the same as no check at all.
+m="sh $top/scripts/manifest.sh"
+nsub=`$m subsystems | wc -w | tr -d ' '`
+nflag=`$m withflags  | wc -w | tr -d ' '`
+if ! grep -q 'Cflags:.*$(SUBSYSTEMS)' "$top/Makefile"; then
     printf '  %-40s NOT EXPORTED\n' "bitters.pc exports them"
     bad=1
+elif [ "$nsub" -eq 0 ] || [ "$nflag" -ne "$nsub" ]; then
+    printf '  %-40s %s gates for %s subsystems\n' \
+	"bitters.pc exports them" "$nflag" "$nsub"
+    bad=1
+else
+    printf '  %-40s %s flags\n' "bitters.pc exports them" "$nflag"
 fi
 
 if [ $bad -eq 0 ]; then

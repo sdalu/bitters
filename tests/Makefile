@@ -2,10 +2,15 @@
 # Portable between GNU make and BSD make (no conditionals, no pattern
 # rules, no GNU-only functions).
 #
-#   make            build everything
-#   make check      run the tests that need no special privilege
-#   make check-gpio run the GPIO tests (needs root + the gpio-mockup module)
-#   make endian     check the i2c bitfield view on other-endian targets
+#   make              build everything
+#   make tests        run the tests that need no special privilege
+#   make tests-gpio   run the GPIO tests (needs root + the gpio-mockup module)
+#   make tests-endian check the i2c bitfield view on other-endian targets
+#
+# These are the suite: they build the test programs and run them. The
+# preflight that runs none of bitters' code -- check-manifest.sh and
+# check-subset.sh, in this directory -- belongs to `make check` at the top
+# of the tree, which is a different phase and a different question.
 #
 # The GPIO tests drive a *virtual* chip (gpio-mockup); they never touch
 # real hardware. They need root to load the module and write debugfs.
@@ -83,9 +88,7 @@ t_pins_dangling: t_pins_dangling.c $(GPIOSRC)
 # --- running ---------------------------------------------------------
 # The mockup chips are discovered in the recipe: $(shell) is GNU-only.
 # t_cross_teardown needs a second chip and reports 77 (skip) without one.
-check: $(PLAIN)
-	@sh ./check-manifest.sh
-	@sh ./check-subset.sh
+tests: $(PLAIN)
 	@./t_version
 	@BITTERS_SILENCE_WARNING=1 ./t_i2c_endian
 	@BITTERS_SILENCE_WARNING=1 ./t_delay
@@ -93,7 +96,7 @@ check: $(PLAIN)
 	@BITTERS_SILENCE_WARNING=1 ./t_i2c_args
 	@./t_spi_bufsize
 
-check-gpio: all
+tests-gpio: all
 	@set -- `gpiodetect 2>/dev/null | sed -n 's/^\(gpiochip[0-9]*\) \[gpio-mockup.*/\1/p'`; \
 	 chip=$$1; chip2=$$2; \
 	 if [ -z "$$chip" ]; then \
@@ -113,13 +116,13 @@ check-gpio: all
 	 exit $$fail
 
 # i2c bitfield view on other ABIs, by inspecting the emitted `dir` byte.
-# Needs a cross-capable clang; override with  make endian CLANG=clang-XX
+# Needs a cross-capable clang; override with  make tests-endian CLANG=clang-XX
 # Only the struct.anon byte is read: padding differs per ABI (m68k emits a
 # single i8, powerpc64 a [7 x i8]), so a looser match would misreport.
 ENDIAN_TARGETS ?= x86_64 i386 aarch64 riscv64 \
                   powerpc64 powerpc s390x mips mips64 sparc64 m68k \
                   armeb aarch64_be
-endian:
+tests-endian:
 	@CLANG=$${CLANG:-`command -v clang22 || command -v clang || true`}; \
 	if [ -z "$$CLANG" ]; then \
 	    echo "  skipped: no cross-capable clang found (set CLANG=...)"; exit 0; fi; \
@@ -142,4 +145,4 @@ endian:
 clean:
 	rm -f $(PLAIN) $(GPIO) $(SUPPORT) *.o
 
-.PHONY: all check check-gpio endian clean
+.PHONY: all tests tests-gpio tests-endian clean

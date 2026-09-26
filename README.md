@@ -21,6 +21,13 @@ Requirements
 * Optional thread support for advanced features
 
 
+Documents
+---------
+* [DESIGN.md](DESIGN.md) -- why bitters is shaped the way it is
+* [CHECKLIST.md](CHECKLIST.md) -- what closes a round of work on it
+* [tests/README.md](tests/README.md) -- what each test pins down
+
+
 Use case
 --------
 * **Prototyping** hardware designs before committing to custom microcontrollers
@@ -78,10 +85,11 @@ Build and configuration
 The Makefile works with both GNU make and BSD make.
 
 ```sh
-make help                       # targets, feature flags and their current values
-make                            # libbitters.so
-make check                      # tests that need no privilege
-sudo make check-gpio            # GPIO tests, see tests/README.md
+make                            # the help: a bare `make` builds nothing
+make all                        # libbitters.so
+make check                      # preflight: is this tree fit to build?
+make tests                      # the suite, needing no privilege
+sudo make tests-gpio            # the GPIO tests, see tests/README.md
 sudo make install PREFIX=/usr   # headers, libbitters.so, bitters.pc
 make static                     # libbitters.a, to link into a single program
 ```
@@ -105,8 +113,8 @@ BITTERS_SUBSYSTEMS='gpio i2c spi'
 BITTERS_INCLUDE='/path/to/bitters/include'
 BITTERS_CFLAGS='-D_GNU_SOURCE -I/path/to/bitters/include'
 BITTERS_LIBS='-lpthread'
-BITTERS_VERSION='1.1.1'
-BITTERS_VERSION_GIT='+4.ge8649eb'
+BITTERS_VERSION='1.2.0'
+BITTERS_VERSION_GIT='+4.gabcdef0'
 ```
 
 `BITTERS_VERSION_GIT` is what a build between releases adds to the release;
@@ -129,8 +137,7 @@ cc $BITTERS_CFLAGS -c $BITTERS_SOURCES
 it: only the `.c` files need `-D_GNU_SOURCE`. It carries what compiling
 bitters *requires* and nothing else -- the feature selection (`THREADS`,
 `GPIO_IRQ`, `ASSERT`, `LOG`) and the `BITTERS_WITH_*` gates for the parts
-you took are yours to choose, and a default printed here would be a second
-place they were decided. To build an application against an installed
+you took are yours to choose. To build an application against an installed
 library, use `pkg-config` (below), which does carry the gates.
 
 For CMake there is `bitters.cmake`, which needs no `make` at all:
@@ -160,29 +167,18 @@ Name the subsystems you took, with `-DBITTERS_WITH_GPIO`,
 `-DBITTERS_WITH_SPI` and `-DBITTERS_WITH_I2C` -- **on your own files as
 well as on `bitters.c`**. Those are what `bitters/spi.h` and its siblings
 are gated by, so a subsystem you did not name is not declared either, and a
-call to it is a compile error in the file that made it. That is the
-earliest place to hear about a subsystem you chose not to carry: earlier
-than a missing symbol at link time, and unmissable next to a runtime code
-that a caller ignoring return values would never see.
+call to it is a compile error in the file that made it, rather than a
+missing symbol at link time or a runtime code a caller might ignore.
+Unlike `BITTERS_WITH_THREADS`, they say nothing about how bitters itself
+was built -- they say which sources your program carries. See
+[DESIGN.md](DESIGN.md) for why that asymmetry is deliberate.
 
-Unlike `BITTERS_WITH_THREADS` these say nothing about how bitters itself
-was built. They say which sources your program carries, which is your
-choice, and that is why they may gate a declaration where
-`BITTERS_WITH_THREADS` must not: you cannot know how the library was
-compiled, but you certainly know what you compiled.
-
-A consumer of an **installed** library did not pick a source list and so
-cannot know either -- `bitters.pc` hands the three over in its `Cflags`,
-alongside the include path, and `pkg-config --cflags bitters` is all such a
-consumer needs.
+A consumer of an **installed** library did not pick a source list, so
+`bitters.pc` hands the three over in its `Cflags` alongside the include
+path, and `pkg-config --cflags bitters` is all such a consumer needs.
 
 `_DELAY` has no flag and is simply left out when it is not wanted, because
 nothing reaches into it.
-
-Those are flags for compiling **bitters**, like `BITTERS_WITH_THREADS`:
-read by `bitters.c` and by nothing else. No public header mentions them
-and `bitters.pc` exports only the include path, so nothing you compile
-*against* bitters has to know how bitters was compiled.
 
 `tests/check-subset.sh`, run by `make check`, links the subsets with their
 flags so the table cannot quietly stop being true.
@@ -190,17 +186,17 @@ flags so the table cannot quietly stop being true.
 The tree builds warning-free with `-Wall -Wextra`; `make WERROR=yes`
 turns warnings into errors, which is what CI should use. Those warning
 flags are applied by the Makefile itself rather than through `CFLAGS`,
-because BSD make predefines `CFLAGS` and they would otherwise be dropped
-there; `CFLAGS` remains yours to set.
+which remains yours to set.
 
 ### Version
 
 `bitters/version.h` carries the release, and is the one place it is
-written -- a C header can read no other file, so a consumer must be able
-to have the version without running anything. `bitters.cmake` parses those
-three lines for `BITTERS_VERSION`, and the Makefile asks
-`scripts/manifest.sh`, which parses them too, so `make version`,
-`bitters.pc` and the soname cannot disagree with the header.
+written. `bitters.cmake` parses those three lines for `BITTERS_VERSION`,
+and the Makefile asks `scripts/manifest.sh`, which parses them too, so
+`make version`, `bitters.pc` and the soname cannot disagree with the
+header; `make check` holds both parses against what the preprocessor
+makes of the same file.
+[DESIGN.md](DESIGN.md) says why the number lives in a header.
 
 ```c
 #include <bitters/version.h>
@@ -236,12 +232,9 @@ exactly when it is a release tree.
 
 The git part is worked out by `scripts/gitversion.sh` and compiled in
 (`-DBITTERS_VERSION_GIT`); the release alone goes into the soname and into
-`bitters.pc`, which name a release and nothing else. Nothing is added when
-the answer would be somebody else's: a tarball has no repository, and a
-tree vendored inside another project's repository would otherwise be
-reporting *that* project's tags and dirt as bitters'. An empty answer is
-never wrong, only less precise -- it says "the release these files say it
-is", which is what a tarball is.
+`bitters.pc`, which name a release and nothing else. It is empty for a
+release, for a tarball, and for a tree vendored inside another project's
+repository -- see [DESIGN.md](DESIGN.md) for why that last case matters.
 
 Bumping a release is editing the three numbers in
 `include/bitters/version.h`, committing, and `make tag`, which reads the
@@ -251,13 +244,13 @@ uncommitted worktree or an existing tag, and pushes nothing.
 
 ```sh
 $EDITOR include/bitters/version.h    # the three numbers
-git commit -am 'Bump the version to 1.1.2.'
-make tag                             # v1.1.2, from the header
-git push origin v1.1.2
+git commit -am 'Bump the version to 1.2.1.'
+make tag                             # v1.2.1, from the header
+git push origin v1.2.1
 ```
 
 `make tag` refuses an unclean worktree or an existing tag, then asks, then
-runs the whole check suite before it tags — so declining costs nothing and
+runs `check` and `tests` before it tags — so declining costs nothing and
 nothing gets tagged that the suite has not passed. `YES=1` answers yes for
 a script; a non-interactive run without it declines.
 
@@ -272,12 +265,28 @@ tree vendored inside another project's repository.
 
 
 Feature selection is done on the `make` command line; `make help` lists
-the flags with their current values, and `make features` reports what a
-given combination produces:
+the flags with their current values:
 
 ```sh
 make THREADS=yes GPIO_IRQ=yes ASSERT=no LOG=no
 ```
+
+`make features` reports what a given combination produces, as shell
+variables, so a script compiling bitters with a chosen feature set can
+consume it the way `make sources` is consumed:
+
+```sh
+$ make -s features THREADS=no GPIO_IRQ=no
+# THREADS=no GPIO_IRQ=no ASSERT=no LOG=no
+BITTERS_FEATURE_CPPFLAGS='-DBITTERS_WITH_GPIO -DBITTERS_WITH_I2C -DBITTERS_WITH_SPI'
+BITTERS_FEATURE_LIBS=''
+```
+
+The first line is a comment, so the whole output evals; strip the `#` and
+it is the `make` command line back again. The names are not
+`BITTERS_CFLAGS` and `BITTERS_LIBS`: those come from `make sources` and
+say what compiling the sources *requires*, which does not move with the
+feature flags. These are this combination's answer, which does.
 
 The feature flags are build-time only. The headers declare the whole API
 whatever they are set to, and a function whose feature was not compiled
@@ -288,9 +297,11 @@ no flag to match the library it links against:
 cc -o app app.c $(pkg-config --cflags --libs bitters)
 ```
 
-`bitters.pc` therefore exports nothing but the include path and the
-libraries to link. In particular it does not export `-D_GNU_SOURCE`:
-that is needed to compile bitters, not to use it.
+`bitters.pc` therefore exports no feature flag, and in particular not
+`-D_GNU_SOURCE`: that is needed to compile bitters, not to use it. What it
+does carry, beside the include path and the libraries to link, is the
+three `BITTERS_WITH_*` subsystem gates -- see
+[Vendoring](#vendoring) above.
 
 The flags below configure **bitters itself**, whether you build it with
 the Makefile or compile its sources into your own build. None of them is

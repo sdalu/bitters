@@ -138,7 +138,7 @@ help:						## show this help
 	@echo 'bitters -- microcontroller-style GPIO, SPI and I2C for Linux'
 	@echo ''
 	@echo 'Targets (a bare `make` prints this):'
-	@awk -F':.*## ' '/^[a-z][a-z-]*:.*## /{printf "  %-12s %s\n", $$1, $$2}' \
+	@awk -F':.*## ' '/^[a-z][a-z-]*:.*## /{printf "  %-16s %s\n", $$1, $$2}' \
 	    Makefile
 	@echo ''
 	@echo 'Features (build-time only; the public API never depends on them):'
@@ -158,7 +158,7 @@ help:						## show this help
 	    DESTDIR  '$(DESTDIR)  (staging prefix for packaging)'
 	@echo ''
 	@echo 'This Makefile works with both GNU make and BSD make.'
-	@echo 'The test suite has its own targets; see tests/README.md.'
+	@echo 'The GPIO tests drive a virtual chip; see tests/README.md.'
 
 .SUFFIXES:
 .SUFFIXES: .c .o .lo
@@ -250,10 +250,10 @@ version-full:					## print the version this tree builds as
 #
 # In that order on purpose: the two refusals are instant, so they come
 # before the question -- there is no point asking about a tag that cannot be
-# made -- and the full check comes after it, because a minute of tests is
+# made -- and `check tests` comes after it, because a minute of tests is
 # not worth spending on a `make tag` the answer to which is no. Tagging
 # something the suite has not passed is the mistake this exists to prevent,
-# so the check is inside the recipe rather than a prerequisite, which would
+# so both are inside the recipe rather than prerequisites, which would
 # have run before the prompt.
 #
 # `make tag YES=1` answers yes for a script, and a non-interactive run with
@@ -266,7 +266,7 @@ tag: $(VERSIONHDR)				## tag this release, from the version header
 	    echo 'make: v$(VERSION) exists already; bump $(VERSIONHDR) first' >&2; \
 	    exit 1; fi
 	@if [ "$(YES)" != 1 ]; then \
-	    printf 'tag v%s at %s? (the full check runs first) [y/N] ' \
+	    printf 'tag v%s at %s? (check and tests run first) [y/N] ' \
 		'$(VERSION)' "`git rev-parse --short HEAD`"; \
 	    read -r ans || ans=; \
 	    case "$$ans" in \
@@ -274,15 +274,36 @@ tag: $(VERSIONHDR)				## tag this release, from the version header
 		*) echo 'make: not tagged'; exit 1 ;; \
 	    esac; \
 	fi
-	@$(MAKE) check
+	@$(MAKE) check tests
 	git tag -a -m '$(NAME) $(VERSION)' 'v$(VERSION)'
 	@sh scripts/checktag.sh '$(VERSION)'
 	@echo 'tagged v$(VERSION) -- push it with: git push origin v$(VERSION)'
 
-features:					## print the feature selection in force
-	@echo 'THREADS=$(THREADS) GPIO_IRQ=$(GPIO_IRQ) ASSERT=$(ASSERT) LOG=$(LOG)'
-	@echo 'build cppflags : $(FEATURES)'
-	@echo 'libs           : $(LIBS)'
+# What a feature combination expands to, as shell, the way `make sources`
+# is -- so that the knobs and the flags they produce are one representation
+# rather than two:
+#
+#     eval "$$(make -s features THREADS=no)"
+#     cc $$BITTERS_FEATURE_CPPFLAGS -c ...
+#
+# The knob line is a shell *comment*, which is what keeps it in the same
+# language as the rest without putting four unprefixed names into the
+# caller's shell. Strip the `#` and it is the make command line back again.
+#
+# The names are prefixed like everything `make sources` emits, and they are
+# deliberately not BITTERS_CFLAGS or BITTERS_LIBS: those answer what
+# compiling *the sources* requires and do not move with the feature flags,
+# while these are this combination's answer and do. Two questions, so two
+# names -- one name with two answers is the drift this tree keeps
+# removing.
+#
+# $(FEATURES) is echoed unquoted on purpose: a feature set to `no`
+# contributes the empty string, and the shell's word splitting is what
+# removes the runs of whitespace that leaves between the flags.
+features:					## print this feature selection as shell variables
+	@echo '# THREADS=$(THREADS) GPIO_IRQ=$(GPIO_IRQ) ASSERT=$(ASSERT) LOG=$(LOG)'
+	@printf "BITTERS_FEATURE_CPPFLAGS='%s'\n" "`echo $(FEATURES)`"
+	@printf "BITTERS_FEATURE_LIBS='%s'\n"     "`echo $(LIBS)`"
 
 # Everything needed to compile bitters straight into another project,
 # emitted as shell variables so a build script can consume it:
@@ -294,11 +315,35 @@ features:					## print the feature selection in force
 sources:					## print vendoring files and flags as shell variables
 	@$(MANIFEST) vars "`pwd`"
 
-check:						## run the tests needing no privilege
-	cd tests && $(MAKE) check
+# Preflight: is this tree fit to build? It runs none of bitters' own code
+# -- the manifest still describes the tree, both text parses of the version
+# agree with the compiler's, the tag does not contradict the header, every
+# vendoring subset still compiles and still refuses what it must, and
+# `make features` still evals to what the README says. So it is
+# cheap, it needs nothing built, and it is the first thing to run when
+# something looks wrong. Running the code is `tests`, below.
+check: featurecheck check-manifest check-features check-subset	## preflight: this tree is fit to build
 
-check-gpio:					## run the GPIO tests (needs root + gpio-mockup)
-	cd tests && $(MAKE) check-gpio
+check-manifest:					## bitters.cmake and version.h still describe the tree
+	@sh tests/check-manifest.sh
+
+# $(MAKE) is passed on so the check asks the make that is running: `gmake
+# check` then holds gmake's answer up, not this host's default make's.
+check-features:					## `make features` is still the interface the README documents
+	@MAKE='$(MAKE)' sh tests/check-features.sh
+
+check-subset:					## every vendoring subset still compiles, and refuses
+	@sh tests/check-subset.sh
+
+# The suite. It builds what it needs and runs it; tests/Makefile owns how.
+tests:						## build and run the tests needing no privilege
+	cd tests && $(MAKE) tests
+
+tests-gpio:					## the GPIO tests (needs root + gpio-mockup)
+	cd tests && $(MAKE) tests-gpio
+
+tests-endian:					## the i2c bitfield view on other-endian ABIs
+	cd tests && $(MAKE) tests-endian
 
 # PROJECT_NUMBER is appended rather than written in the Doxyfile, so the
 # documentation says which version it documents without that being a
@@ -342,6 +387,6 @@ distclean: clean				## clean, plus the generated documentation
 	rm -rf doc/html doc/latex
 
 
-.PHONY: all static shared featurecheck check check-gpio doc install \
-	uninstall clean distclean version version-full tag features sources \
-	help
+.PHONY: all static shared featurecheck check check-manifest check-subset \
+	check-features tests tests-gpio tests-endian doc install uninstall \
+	clean distclean version version-full tag features sources help

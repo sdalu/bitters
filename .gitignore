@@ -12,3 +12,7 @@ doc/latex/
 # the test programs: one per tests/t_*.c, named by dropping the suffix
 tests/t_*
 !tests/t_*.c
+
+# the personal counterpart of CLAUDE.md: what is true of this checkout
+# rather than of the repository
+CLAUDE.local.md

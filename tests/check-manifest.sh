@@ -5,7 +5,7 @@
 # because a C header can read no other file, and parsed from there by
 # bitters.cmake and by manifest.sh. There is no second copy of either to
 # compare against any more -- what is left to check is that they still
-# describe the tree, that the two parses of the version agree with the
+# describe the tree, that both text parses of the version agree with the
 # compiler's, and that nothing has quietly gone back to keeping its own
 # list. Run by `make check`.
 set -e
@@ -27,7 +27,7 @@ esac
 # The manifest parses version.h with awk and bitters.cmake with a regex,
 # but what a consumer actually gets is what the *preprocessor* makes of
 # it. Ask it, so that a second #define, a comment in the wrong place or a
-# clever macro cannot make the two disagree.
+# clever macro cannot make the readers disagree.
 cc=${CC:-cc}
 cppversion=$(printf '#include <bitters/version.h>\nBITTERS_VERSION_STRING\n' \
 	    | $cc -E -I"$top/include" -x c - 2>/dev/null \
@@ -38,6 +38,33 @@ if [ -z "$cppversion" ]; then
 elif [ "$cppversion" != "$version" ]; then
     echo "  version: the manifest says $version, the preprocessor $cppversion"
     bad=1
+fi
+
+# --- and so does the third reader -------------------------------------
+# bitters.cmake parses the same three lines with its own regex, and a CMake
+# consumer gets that answer without ever running the Makefile or this
+# script's awk. Two text parsers agreeing with each other proves nothing
+# about the third, so ask CMake itself rather than re-implementing its
+# regex here -- a fourth parser would only be a fourth thing to be wrong.
+# Skipped, loudly, where there is no cmake to ask.
+if command -v cmake >/dev/null 2>&1; then
+    ctmp=`mktemp -d`
+    {
+	echo "include(\"`cd \"$top\" && pwd`/bitters.cmake\")"
+	echo 'message(STATUS "BITTERS_VERSION=${BITTERS_VERSION}")'
+    } > "$ctmp/v.cmake"
+    cmakeversion=`cmake -P "$ctmp/v.cmake" 2>&1 \
+		  | sed -n 's/^-- BITTERS_VERSION=//p'`
+    rm -rf "$ctmp"
+    if [ -z "$cmakeversion" ]; then
+	echo "  version: bitters.cmake makes nothing of BITTERS_VERSION"
+	bad=1
+    elif [ "$cmakeversion" != "$version" ]; then
+	echo "  version: the manifest says $version, bitters.cmake $cmakeversion"
+	bad=1
+    fi
+else
+    echo "  version: bitters.cmake's parse unchecked (no cmake)"
 fi
 
 # --- and the tags say the same thing ----------------------------------
