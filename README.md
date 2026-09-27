@@ -1,42 +1,78 @@
-Bitters
-=======
+# Bitters
 
 Bitters is a portable C glue that brings microcontroller-style APIs to Linux
 GPIO, SPI, and I2C interfaces. It uses Linux ioctl calls for both performance
 and portability (no devmem, no sysfs).
 
 
-Key features
-------------
+## Quick start
+
+Bitters needs a Linux host -- the sources include `linux/*.h` -- and a C
+compiler with GNU extensions (`-D_GNU_SOURCE`); thread support is optional.
+Build and install the library, with GNU make or BSD make:
+
+```sh
+make all                        # libbitters.so
+sudo make install PREFIX=/usr   # headers, libbitters.so, bitters.pc
+```
+
+Then blink an LED on pin 11 of a Raspberry Pi header:
+
+```c
+#include <bitters.h>
+#include <bitters/gpio.h>
+#include <bitters/delay.h>
+#include <bitters/rpi.h>
+
+int main(void)
+{
+    bitters_gpio_pin_t led = BITTERS_GPIO_PIN_INITIALIZER(BITTERS_RPI_GPIO_CHIP,
+                                                          BITTERS_RPI_P1_11);
+    bitters_gpio_cfg_t cfg = {
+        .dir    = BITTERS_GPIO_DIR_OUTPUT,
+        .defval = 0,
+        .label  = "led",
+    };
+
+    bitters_init();
+    bitters_gpio_pin_enable(&led, &cfg);
+    for (int i = 0; i < 10; i++) {
+        bitters_gpio_pin_write(&led, 1);
+        bitters_delay_msec(500);
+        bitters_gpio_pin_write(&led, 0);
+        bitters_delay_msec(500);
+    }
+    bitters_gpio_pin_disable(&led);
+    return 0;
+}
+```
+
+```sh
+cc -o blink blink.c $(pkg-config --cflags --libs bitters)
+./blink
+```
+
+Run it as a user that may open `/dev/gpiochip*` (root, or the `gpio` group
+on Raspberry Pi OS). `pkg-config` supplies the include path and the
+`BITTERS_WITH_*` gates the headers are declared under, so no other flag is
+needed to build against the installed library.
+
+To compile the sources into your own program instead of installing a
+library, see [Vendoring](#vendoring). The [Examples](#examples) at the end
+add an interrupt callback and an SPI transfer to this.
+
+
+## Key features
+
 * **Familiar API design** modeled after embedded SDK patterns
 * **High performance** through direct ioctl calls
 * **Raspberry Pi support** with pin mapping included (`bitters/rpi.h`)
-* **Full documentation** via Doxygen
+* **Full documentation** via Doxygen (`make doc`)
 * **Apache-2 licensed** (BSD-3-Clause for queue.h)
 
 
-Requirements
-------------
-* GNU C library extensions
-* Optional thread support for advanced features
+## Why Bitters?
 
-
-Documents
----------
-* [DESIGN.md](DESIGN.md) -- why bitters is shaped the way it is
-* [CHECKLIST.md](CHECKLIST.md) -- what closes a round of work on it
-* [tests/README.md](tests/README.md) -- what each test pins down
-
-
-Use case
---------
-* **Prototyping** hardware designs before committing to custom microcontrollers
-* **SDK porting** when migrating device manufacturer code to Linux platforms
-* **Education** for developers learning embedded Linux without fighting interface complexity
-
-
-Why Bitters?
-------------
 If you've worked with microcontrollers, you know how straightforward hardware
 access can be. Manufacturers provide SDKs with consistent APIs: enable a
 peripheral, configure it, read or write.
@@ -75,10 +111,21 @@ you'd find in microcontroller SDKs, providing you with:
                             hardware
 ```
 
+It fits:
+
+* **Prototyping** hardware designs before committing to custom microcontrollers
+* **SDK porting** when migrating device manufacturer code to Linux platforms
+* **Education** for developers learning embedded Linux without fighting interface complexity
 
 
-Build and configuration
-=======================
+## Documents
+
+* [DESIGN.md](DESIGN.md) -- why bitters is shaped the way it is
+* [CHECKLIST.md](CHECKLIST.md) -- what closes a round of work on it
+* [tests/README.md](tests/README.md) -- what each test pins down
+
+
+## Build and configuration
 
 ### Building
 
@@ -92,6 +139,7 @@ make tests                      # the suite, needing no privilege
 sudo make tests-gpio            # the GPIO tests, see tests/README.md
 sudo make install PREFIX=/usr   # headers, libbitters.so, bitters.pc
 make static                     # libbitters.a, to link into a single program
+make doc                        # the Doxygen documentation, into doc/
 ```
 
 ### Vendoring
@@ -150,14 +198,15 @@ target_compile_definitions(bitters INTERFACE _GNU_SOURCE)
 target_sources(bitters INTERFACE ${BITTERS_SOURCES})
 ```
 
-It sets variables rather than defining a target, so you can compile
-bitters differently for different targets -- giving only your threaded
-program `BITTERS_WITH_THREADS`, say -- and leave out a subsystem you do
-not use, through `BITTERS_SOURCES_CORE`, `_GPIO`, `_SPI`, `_I2C` and
-`_DELAY`. It also sets `BITTERS_VERSION`, which it reads from
-`include/bitters/version.h` -- the release, since a source list cannot
-honestly claim to be more than that; a tree built between releases says so
-through `bitters_version()` at run time.
+It sets variables rather than defining a target (`BITTERS_INCLUDE_DIR`
+is the `BITTERS_INCLUDE` of `make sources`, and the source lists carry the
+same names), so you can compile bitters differently for different targets
+-- giving only your threaded program `BITTERS_WITH_THREADS`, say -- and
+leave out a subsystem you do not use, through `BITTERS_SOURCES_CORE`,
+`_GPIO`, `_SPI`, `_I2C` and `_DELAY`. It also sets `BITTERS_VERSION`,
+which it reads from `include/bitters/version.h` -- the release, since a
+source list cannot honestly claim to be more than that; a tree built
+between releases says so through `bitters_version()` at run time.
 
 Any combination links: the subsystems never reach into one another, and
 `CORE` reaches into the ones the build says it has, so `CORE` alone links
@@ -209,13 +258,13 @@ printf("built against %s, running against %s\n",
        BITTERS_VERSION_STRING, bitters_version());
 ```
 
-| **Macro / call** | **What it says** |
-|---|---|
-| `BITTERS_VERSION_MAJOR` / `_MINOR` / `_PATCH` | the release, as numbers |
-| `BITTERS_VERSION_STRING` | the release, as `"1.1.1"` |
-| `BITTERS_VERSION_NUMBER` | the release as one comparable integer -- 1.2.3 is `10203` |
-| `BITTERS_VERSION_AT_LEAST(maj, min, pat)` | for `#if` |
-| `bitters_version()` | what the library you linked against is, at run time |
+| **Macro / call**                              | **What it says**                                          |
+|-----------------------------------------------|-----------------------------------------------------------|
+| `BITTERS_VERSION_MAJOR` / `_MINOR` / `_PATCH` | the release, as numbers                                   |
+| `BITTERS_VERSION_STRING`                      | the release, as `"1.1.1"`                                 |
+| `BITTERS_VERSION_NUMBER`                      | the release as one comparable integer -- 1.2.3 is `10203` |
+| `BITTERS_VERSION_AT_LEAST(maj, min, pat)`     | for `#if`                                                 |
+| `bitters_version()`                           | what the library you linked against is, at run time       |
 
 The macros answer for the **headers**, which is what a `#if` can answer
 for. `bitters_version()` answers for the **library**, which for a shared
@@ -250,7 +299,7 @@ git push origin v1.2.1
 ```
 
 `make tag` refuses an unclean worktree or an existing tag, then asks, then
-runs `check` and `tests` before it tags — so declining costs nothing and
+runs `check` and `tests` before it tags -- so declining costs nothing and
 nothing gets tagged that the suite has not passed. `YES=1` answers yes for
 a script; a non-interactive run without it declines.
 
@@ -263,6 +312,7 @@ releases and passes; behind a tag that exists does not. It says nothing at
 all where the answer would be somebody else's: no git, a tarball, or a
 tree vendored inside another project's repository.
 
+### Feature selection
 
 Feature selection is done on the `make` command line; `make help` lists
 the flags with their current values:
@@ -371,7 +421,6 @@ Logging goes to `stderr` by default, and assertions use the standard
 and `BITTERS_ASSERT(expr)` macros (on the compiler command line, or before
 including `bitters.h`).
 
-
 ### Suppress Warnings
 
 Several configuration warnings are emitted at run-time to notify
@@ -387,20 +436,12 @@ using environment variable.
 | All                                 | BITTERS_SILENCE_WARNING             |
 
 
+## Library
 
-Devices
-=======
-If you need to manipulate device-tree, you can read about it:
-https://michael.franzl.name/blog/posts/2016-11-10-setting-i2c-speed-raspberry-pi
-
-
-Library
--------
 `bitters_init()` initializes the library: one call, whatever you use. If
 you only use one subsystem you can instead call its dedicated init
 function (`bitters_gpio_init()`, `bitters_spi_init()`,
 `bitters_i2c_init()`); calling an init twice, or in either order, is fine.
-
 
 A vendored tree names the subsystems it took with `-DBITTERS_WITH_GPIO` /
 `_SPI` / `_I2C`, and `bitters_init()` brings up those and is still the one
@@ -408,24 +449,24 @@ call -- see [Vendoring](#vendoring) above.
 
 ### API Functions
 
-| **Function**                | **Description**                                          |
-|-----------------------------|----------------------------------------------------------|
-| `bitters_init()`            | Initialize the library (all subsystems present)           |
-| `bitters_reduced_latency()` | Reduce IO latency (raise scheduling priority, lock pages in memory) |
+| **Function**                | **Description**                                                          |
+|-----------------------------|--------------------------------------------------------------------------|
+| `bitters_init()`            | Initialize the library (all subsystems present)                          |
+| `bitters_reduced_latency()` | Reduce IO latency (raise scheduling priority, lock pages in memory)      |
 | `bitters_version()`         | The version of the library actually linked against ([Version](#version)) |
 
 
-GPIO
-----
+## GPIO
+
 On Linux, the gpio pull strength is considered to be part of the hardware
 platform.
 It needs to be configured at boot time, using either
 * on Raspberry Pi
-  *  `pinctrl` command (previously `raspi-gpio`), run `pinctrl help` for details.
-     Example for pull up: `pinctrl set _pin_ pu`
+  * `pinctrl` command (previously `raspi-gpio`), run `pinctrl help` for details.
+    Example for pull up: `pinctrl set _pin_ pu`
   * `config.txt` bootloader config, see rpi documentation `config-txt/gpio.md`
-     for details.
-	 Example for pull up: adding entry `gpio=_pin-list_=pu`
+    for details.
+    Example for pull up: adding entry `gpio=_pin-list_=pu`
 * device-tree
 
 ### Naming the controller
@@ -492,28 +533,27 @@ Pi 4, `pinctrl-bcm2835` before that -- rather than by device number,
 which is assigned at probe and moved when the Pi 5 put the header on its
 RP1 southbridge. The alternatives are tried in order and `gpiochip0` is
 the last of them, so a chip none of the labels match behaves as every
-earlier release did. The line offsets are the same on all of them. The
-macro is defined only if it is not already, so a build that knows better
-can say so on the compiler command line, as a string literal:
+earlier release did. The line offsets are the same on all of them.
+`BITTERS_RPI_GPIO_CHIP` is an alias of `BITTERS_RPI_BCM_GPIO_CHIP`, which
+is defined only if it is not already, so a build that knows better can say
+so on the compiler command line, as a string literal:
 `-DBITTERS_RPI_BCM_GPIO_CHIP='"gpiochip4"'`.
-
 
 ### API Functions
 
-| **Function**                       | **Description**                                       |
-|------------------------------------|-------------------------------------------------------|
-| `bitters_gpio_pin_enable()`        | Enable and configure pin                              |
-| `bitters_gpio_pin_disable()`       | Disable pin                                           |
-| `bitters_gpio_pin_read()`          | Read pin value                                        |
-| `bitters_gpio_pin_write()`         | Write pin value                                       |
-| `bitters_gpio_irq_wait()`          | Blocking wait for interrupt                           |
-| `bitters_gpio_irq_fill_pollfd()`   | Fill a `pollfd` structure for use with `poll`/`ppoll` |
-| `bitters_gpio_irq_callback()`      | Register interrupt callback (requires thread support) |
+| **Function**                     | **Description**                                       |
+|----------------------------------|-------------------------------------------------------|
+| `bitters_gpio_pin_enable()`      | Enable and configure pin                              |
+| `bitters_gpio_pin_disable()`     | Disable pin                                           |
+| `bitters_gpio_pin_read()`        | Read pin value                                        |
+| `bitters_gpio_pin_write()`       | Write pin value                                       |
+| `bitters_gpio_irq_wait()`        | Blocking wait for interrupt                           |
+| `bitters_gpio_irq_fill_pollfd()` | Fill a `pollfd` structure for use with `poll`/`ppoll` |
+| `bitters_gpio_irq_callback()`    | Register interrupt callback (requires thread support) |
 
 
+## I2C
 
-I2C
----
 On Linux, the I2C bus speed is considered to be part of the hardware
 platform, using a fixed speed based on the lowest common speed of
 the I2C devices attached to the bus.
@@ -521,10 +561,13 @@ the I2C devices attached to the bus.
 It needs to be configured at boot time, using either:
 * on Raspberry Pi
   * `config.txt`: adding the `i2c_arm_baudrate=xxxx` parameter to the
-   `dtparam=i2c_arm=on` entry
+    `dtparam=i2c_arm=on` entry
 * modprobe: passing the `baudrate=xxx` parameter to the driver kernel module
 * device-tree: the `clock-frequency` parameter found in
   `brcm,bcm2835-i2c` in case of a Raspberry Pi
+
+If you need to manipulate the device-tree for that, there is a write-up on
+[setting the I2C speed on a Raspberry Pi](https://michael.franzl.name/blog/posts/2016-11-10-setting-i2c-speed-raspberry-pi).
 
 ### API Functions
 
@@ -536,26 +579,25 @@ It needs to be configured at boot time, using either:
 | `bitters_i2c_transfer()`  | Perform I2C transfer                   |
 
 
-SPI
----
+## SPI
+
 On linux the SPI max transfer size is by default a page size (4096 bytes),
 you could/should increase this value by adding the `spidev.bufsiz=65536`
 parameter to the kernel. On a Raspberry Pi, this is done in `/boot/cmdline.txt`
 
-
 ### API Functions
 
-| **Function**                 | **Description**            |
-|------------------------------|----------------------------|
-| `bitters_spi_enable()`       | Enable and configure SPI   |
-| `bitters_spi_disable()`      | Disable SPI                |
-| `bitters_spi_set_speed()`    | Set bus speed              |
-| `bitters_spi_set_wordsize()` | Set word size              |
-| `bitters_spi_transfer()`     | Perform SPI transfer       |
+| **Function**                 | **Description**          |
+|------------------------------|--------------------------|
+| `bitters_spi_enable()`       | Enable and configure SPI |
+| `bitters_spi_disable()`      | Disable SPI              |
+| `bitters_spi_set_speed()`    | Set bus speed            |
+| `bitters_spi_set_wordsize()` | Set word size            |
+| `bitters_spi_transfer()`     | Perform SPI transfer     |
 
 
-Delay
------
+## Delay
+
 Delay helpers sleep with all signals masked, so the delay is not cut short
 by signal delivery. If your application uses threads, compile with
 `-DBITTERS_WITH_THREADS` so that only the calling thread's signal mask is
@@ -569,28 +611,31 @@ affected.
 | `bitters_delay_msec()` | Delay for a number of milliseconds |
 
 
-Getting started
-===============
-~~~sh
+## Examples
+
+The examples build against an installed library with `pkg-config`, as in
+the [Quick start](#quick-start), or straight from the sources:
+
+```sh
 gcc ${bitters}/src/*.c -I ${bitters}/include .... \
     -D_GNU_SOURCE -DBITTERS_WITH_THREADS -DBITTERS_WITH_GPIO_IRQ -pthread
-~~~
+```
 
 or let the Makefile hand you the same thing, so the flags cannot drift:
 
-~~~sh
+```sh
 eval "$(make -s -C ${bitters} sources)"
 gcc $BITTERS_CFLAGS $BITTERS_SOURCES .... $BITTERS_LIBS
-~~~
+```
 
-The `-DBITTERS_WITH_GPIO_IRQ` flag is only needed if you use
-`bitters_gpio_irq_callback()` (as in the example below); it requires
-`-DBITTERS_WITH_THREADS`.
+Those feature flags are for the bitters sources compiled in the same
+command, not for your own files. `-DBITTERS_WITH_GPIO_IRQ` is only needed
+if you use `bitters_gpio_irq_callback()` (as in the example below); it
+requires `-DBITTERS_WITH_THREADS`.
 
-Example
--------
+### Reset, interrupt callback and SPI transfer
 
-~~~c
+```c
 #include "bitters.h"
 #include "bitters/rpi.h"
 #include "bitters/gpio.h"
@@ -647,15 +692,16 @@ int main() {
 
   return 0;
 }
-~~~
+```
 
+### Interrupts through `poll()`
 
 You could also find it easier (and it won't require thread support) to
 process interrupt using the unix `poll`/`ppoll` to wait on multiple
 events. The `pollfd` entry can be filled manually as below, or with the
 `bitters_gpio_irq_fill_pollfd()` helper:
 
-~~~c
+```c
 // Fill the pollfd structure with all the file descriptor
 // for which you are waiting for an event
 struct pollfd pfds[] = {
@@ -683,4 +729,4 @@ if (BITTERS_GPIO_IRQ_FD(pin) >= 0) {
         }
     }
 }
-~~~
+```
