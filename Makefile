@@ -134,12 +134,20 @@ SUBHEADERS = include/bitters/delay.h include/bitters/gpio.h \
 # help comes first so that a bare `make` prints it: both makes take the
 # first target as the default goal, and what to build is usually the wrong
 # question for a tree that is mostly vendored into other projects.
-help:						## show this help
+help:						## show this help (the default)
 	@echo 'bitters -- microcontroller-style GPIO, SPI and I2C for Linux'
 	@echo ''
-	@echo 'Targets (a bare `make` prints this):'
-	@awk -F':.*## ' '/^[a-z][a-z-]*:.*## /{printf "  %-16s %s\n", $$1, $$2}' \
-	    Makefile
+	@echo 'Targets:'
+	@awk -F':.*## ' '/^[a-z][a-z0-9-]*:.*## /{ \
+	    pre = sprintf("  %-16s ", $$1); n = split($$2, w, / /); line = ""; \
+	    for (i = 1; i <= n; i++) { \
+	        cand = (line == "" ? w[i] : line " " w[i]); \
+	        if (length(pre) + length(cand) > 80 && line != "") { \
+	            print pre line; pre = "                   "; line = w[i]; \
+	        } else line = cand; \
+	    } \
+	    if (line != "") print pre line; \
+	}' Makefile
 	@echo ''
 	@echo 'Features (build-time only; the public API never depends on them):'
 	@printf '  %-12s %-5s %s\n' \
