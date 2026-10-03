@@ -7,6 +7,12 @@
 #include <string.h>
 #include "bitters/spi.h"
 
+/* a const buffer -- a command table, a string -- goes in .tx without a
+ * cast. A compile-time check, so it holds without -Werror */
+_Static_assert(_Generic(((struct bitters_spi_transfer *)0)->tx,
+                        const uint8_t *: 1, default: 0),
+               "bitters_spi_transfer.tx must be a pointer to const");
+
 static int bad = 0;
 static void expect(const char *what, int got, int want) {
     printf("  %-46s %-5d (want %d)%s\n", what, got, want,

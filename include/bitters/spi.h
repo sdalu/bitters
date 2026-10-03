@@ -119,7 +119,7 @@ typedef struct bitters_spi_cfg {
  * SPI transfer chunk.
  */
 struct bitters_spi_transfer {
-    uint8_t *tx;	/**< TX buffer or NULL 		*/
+    const uint8_t *tx;	/**< TX buffer or NULL (zeros sent) */
     uint8_t *rx;	/**< RX buffer or NULL 		*/
     size_t   len;	/**< buffer size		*/
 };

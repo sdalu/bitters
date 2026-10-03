@@ -635,6 +635,11 @@ requires `-DBITTERS_WITH_THREADS`.
 
 ### Reset, interrupt callback and SPI transfer
 
+The pins are those of a DW1000 radio on a Raspberry Pi (interrupt on
+P1_15, reset on P1_18). Its reset line is active-low and must not be
+driven high from outside, so it is declared `active_low` and open-drain:
+writing 1 pulls it low, writing 0 lets go of it.
+
 ```c
 #include "bitters.h"
 #include "bitters/rpi.h"
@@ -648,16 +653,18 @@ void my_irq_callback(bitters_gpio_pin_t *pin, void *args) {
 
 int main() {
   bitters_gpio_pin_t reset = BITTERS_GPIO_PIN_INITIALIZER(BITTERS_RPI_GPIO_CHIP,
-                                                          BITTERS_RPI_P1_15);
+                                                          BITTERS_RPI_P1_18);
   bitters_gpio_pin_t irq   = BITTERS_GPIO_PIN_INITIALIZER(BITTERS_RPI_GPIO_CHIP,
-                                                          BITTERS_RPI_P1_11);
+                                                          BITTERS_RPI_P1_15);
   bitters_spi_t spi0       = BITTERS_SPI_INITIALIZER(BITTERS_RPI_SPI0, 0);
 
 
   struct bitters_gpio_cfg reset_cfg  = {
-    .dir       = BITTERS_GPIO_DIR_OUTPUT,
-    .defval    = 1,
-    .label     = "reset",
+    .dir        = BITTERS_GPIO_DIR_OUTPUT,
+    .mode       = BITTERS_GPIO_MODE_OPEN_DRAIN,
+    .active_low = 1,
+    .defval     = 0,             // released
+    .label      = "reset",
   };
 
   struct bitters_gpio_cfg irq_cfg  = {
@@ -679,14 +686,15 @@ int main() {
   bitters_gpio_irq_callback(&irq, my_irq_callback, NULL);
   bitters_spi_enable(&spi0, &spi0_cfg);
 
-  bitters_gpio_pin_write(&reset, 1);
+  bitters_gpio_pin_write(&reset, 1);   // assert: line pulled low
   bitters_delay_usec(100);
-  bitters_gpio_pin_write(&reset, 0);
+  bitters_gpio_pin_write(&reset, 0);   // release
 
-  uint8_t data[8];
+  static const uint8_t cmd[] = { 0x00 };   // read register 0x00 (DEV_ID)
+  uint8_t data[4];
   const struct bitters_spi_transfer xfr[] = {
-    { .tx = "cmd", .len = 3            },
-    { .rx = data,  .len = sizeof(data) }
+    { .tx = cmd,  .len = sizeof(cmd)  },
+    { .rx = data, .len = sizeof(data) }
   };
   bitters_spi_transfer(&spi0, xfr, 2);
 

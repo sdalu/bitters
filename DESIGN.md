@@ -187,6 +187,18 @@ callback may itself enable, disable or re-register pins, including
 siblings, because the lock is not held while it runs.
 
 
+The transmit buffer is const
+----------------------------
+
+`bitters_spi_transfer.tx` is `const uint8_t *`: bitters only hands it to
+the kernel, which only reads it. As a plain `uint8_t *` the commonest
+transmit buffer, a constant command table or a string, could only go in
+with a cast that drops `const`, and a cast in every caller teaches the
+wrong thing. Constifying is source-compatible for anyone who assigns to
+the field; only code reading a pointer back out of `.tx` into a non-const
+one is affected. `rx` stays writable, it is written. `t_spi_args` pins the
+qualifier at compile time, so it holds without `-Werror`.
+
 One Makefile for two makes
 --------------------------
 
